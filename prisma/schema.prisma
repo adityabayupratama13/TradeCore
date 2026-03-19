@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Portfolio {
+  id           String   @id @default(cuid())
+  name         String
+  totalCapital Float
+  currency     String   @default("IDR")
+  createdAt    DateTime @default(now())
+  trades       Trade[]
+}
+
+model Trade {
+  id          String       @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio    @relation(fields: [portfolioId], references: [id])
+  marketType  String
+  symbol      String
+  direction   String
+  entryPrice  Float
+  exitPrice   Float?
+  quantity    Float
+  leverage    Float        @default(1)
+  stopLoss    Float?
+  takeProfit  Float?
+  status      String       @default("OPEN")
+  pnl         Float?
+  pnlPct      Float?
+  entryAt     DateTime     @default(now())
+  exitAt      DateTime?
+  createdAt   DateTime     @default(now())
+  journal     TradeJournal?
+}
+
+model TradeJournal {
+  id             String        @id @default(cuid())
+  tradeId        String        @unique
+  trade          Trade         @relation(fields: [tradeId], references: [id])
+  notes          String?
+  emotionState   String        @default("CALM")
+  ruleFollowed   Boolean       @default(true)
+  lessonsLearned String?
+  createdAt      DateTime      @default(now())
+}
+
+model RiskRule {
+  id                  String   @id @default(cuid())
+  maxDailyLossPct     Float    @default(3)
+  maxWeeklyLossPct    Float    @default(7)
+  maxDrawdownPct      Float    @default(15)
+  maxPositionSizePct  Float    @default(2)
+  maxRiskPerTradePct  Float    @default(2)
+  maxLeverage         Float    @default(3)
+  maxOpenPositions    Int      @default(5)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+}
+
+model RiskEvent {
+  id             String    @id @default(cuid())
+  eventType      String    // DAILY_LOCK, WEEKLY_WARNING, DRAWDOWN_WARNING, TRADE_BLOCKED, RULES_UPDATED, LOCK_EXPIRED
+  description    String
+  capitalAtEvent Float
+  metadata       String?   // JSON string
+  createdAt      DateTime  @default(now())
+}
+
+model EngineLog {
+  id          String      @id @default(cuid())
+  cycleNumber Int
+  symbol      String?
+  action      String
+  signal      String?     
+  result      String      
+  reason      String?
+  durationMs  Int?
+  createdAt   DateTime    @default(now())
+}
+
+model TradeSignalHistory {
+  id          String   @id @default(cuid())
+  symbol      String
+  action      String
+  confidence  Int
+  reasoning   String
+  entryPrice  Float?
+  stopLoss    Float?
+  takeProfit  Float?
+  leverage    Int
+  riskReward  Float?
+  keySignal   String
+  wasExecuted Boolean  @default(false)
+  tradeId     String?
+  createdAt   DateTime @default(now())
+}
+
+model DailyPerformance {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  startingCapital Float
+  endingCapital   Float
+  totalTrades     Int      @default(0)
+  winningTrades   Int      @default(0)
+  losingTrades    Int      @default(0)
+  dailyPnl        Float    @default(0)
+  dailyPnlPct     Float    @default(0)
+  createdAt       DateTime @default(now())
+}
+
+model AppSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+

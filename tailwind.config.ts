@@ -12,6 +12,16 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
+      keyframes: {
+        greenFlash: {
+          '0%': { color: '#00D4AA' },
+          '100%': { color: '#ffffff' },
+        },
+        redFlash: {
+          '0%': { color: '#FF4757' },
+          '100%': { color: '#ffffff' },
+        }
+      },
     },
   },
   plugins: [],
