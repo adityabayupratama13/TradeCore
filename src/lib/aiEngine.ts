@@ -296,7 +296,47 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
     const activePairs = JSON.parse(setting.value);
     const pair = activePairs.find((p: any) => p.symbol === symbol);
     if (pair) {
-      const { fundingRate, fundingCategory, direction, biasSide, squeezeRisk, volume24h, priceChange24h } = pair;
+      const { fundingRate, fundingCategory, direction, biasSide, squeezeRisk, volume24h, priceChange24h, oiData } = pair;
+      
+      let oiSection = '';
+      if (oiData && oiData.oiSignal) {
+        oiSection = `OPEN INTEREST ANALYSIS:
+Current OI: $${(oiData.currentOIValue / 1e9).toFixed(2)}B
+OI Change 1h: ${oiData.oiChange1h > 0 ? '+' : ''}${oiData.oiChange1h.toFixed(2)}%
+OI Change 4h: ${oiData.oiChange4h > 0 ? '+' : ''}${oiData.oiChange4h.toFixed(2)}%
+OI Trend: ${oiData.oiTrend}
+
+POSITION SENTIMENT:
+Long/Short Ratio (all accounts): ${oiData.lsRatio.toFixed(3)}
+Top Trader L/S Ratio: ${oiData.topTraderLsRatio.toFixed(3)}
+  ${oiData.topTraderLsRatio > 1.3 ? '→ Smart money leaning LONG' :
+    oiData.topTraderLsRatio < 0.8 ? '→ Smart money leaning SHORT' :
+    '→ Smart money neutral'}
+
+TAKER AGGRESSION:
+Buy Volume: ${(oiData.takerBuyRatio * 100).toFixed(1)}%
+Sell Volume: ${(oiData.takerSellRatio * 100).toFixed(1)}%
+  ${oiData.takerBuyRatio > 0.6 ? '→ Aggressive buyers in control' :
+    oiData.takerSellRatio > 0.6 ? '→ Aggressive sellers in control' :
+    '→ Balanced taker flow'}
+
+OI SIGNAL: ${oiData.oiSignal.type} (Strength: ${oiData.oiSignal.strength}/3)
+  ${oiData.oiSignal.description}
+
+OI TRADING RULES:
+- TRUST squeeze signals above all technical signals
+  (OI data is ground truth — money in market)
+- If SHORT_SQUEEZE_SETUP → bias LONG strongly
+  even if technicals look bearish
+- If LONG_SQUEEZE_SETUP → bias SHORT strongly
+- If SHORT_COVERING → reduce position size 50%
+  (weak move, likely to fade)
+- If top trader ratio opposite your bias → reduce size
+- If taker buy > 60% AND OI rising → high conviction LONG
+- If taker sell > 60% AND OI rising → high conviction SHORT
+`;
+      }
+
       hunterContext = `MARKET DYNAMICS:
 Funding Rate: ${fundingRate > 0 ? '+' : ''}${(fundingRate * 100).toFixed(4)}%
 Category: ${fundingCategory}
@@ -315,6 +355,8 @@ ${fundingCategory === 'EXTREME' ?
    This is a HIGH CONVICTION contrarian setup.` 
   : `Funding elevated. Mild contrarian pressure toward ${biasSide}.`
 }
+
+${oiSection}
 
 ENTRY RULES FOR THIS PAIR:
 - Primary bias: ${biasSide}

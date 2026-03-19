@@ -256,3 +256,14 @@ export async function enterTrade(params: {
 
   return { entryOrder, slOrder, tpOrder };
 }
+
+export async function fetchOIDataRaw(symbol: string) {
+  const [currentOI, oiHist, lsRatioAcc, topTraderPos, takerVol] = await Promise.all([
+    fetch(`${BASE_URL}/fapi/v1/openInterest?symbol=${symbol}`).then(r => r.json()),
+    fetch(`${BASE_URL}/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`).then(r => r.json()),
+    fetch(`${BASE_URL}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=1h&limit=2`).then(r => r.json()),
+    fetch(`${BASE_URL}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=1h&limit=2`).then(r => r.json()),
+    fetch(`${BASE_URL}/futures/data/takervolumelongshort?symbol=${symbol}&period=15m&limit=2`).then(r => r.json())
+  ]);
+  return { currentOI, oiHist, lsRatioAcc, topTraderPos, takerVol };
+}

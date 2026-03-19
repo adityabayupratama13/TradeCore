@@ -214,13 +214,14 @@ export default function EngineDashboard() {
                      <th className="px-3 py-2">Sym</th>
                      <th className="px-3 py-2">Funding</th>
                      <th className="px-3 py-2">Cat</th>
-                     <th className="px-3 py-2">Dir</th>
-                     <th className="px-3 py-2">Vol</th>
+                     <th className="px-3 py-2">OI (1h)</th>
+                     <th className="px-3 py-2">Signal</th>
+                     <th className="px-3 py-2">Smart $$$</th>
                    </tr>
                  </thead>
                  <tbody>
                     {hunterWatchlist.length === 0 ? (
-                      <tr><td colSpan={5} className="p-4 text-center text-gray-500">Not scanned yet</td></tr>
+                      <tr><td colSpan={6} className="p-4 text-center text-gray-500">Not scanned yet</td></tr>
                     ) : (
                       hunterWatchlist.map((w: any, idx: number) => (
                         <tr key={w.symbol} className={`border-b border-gray-800/20 ${w.fundingCategory === 'EXTREME' ? 'bg-red-500/5 hover:bg-red-500/10' : w.fundingCategory === 'HIGH' ? 'bg-orange-500/5 hover:bg-orange-500/10' : 'hover:bg-white/5'}`}>
@@ -229,8 +230,18 @@ export default function EngineDashboard() {
                            </td>
                            <td className={`px-3 py-2 ${w.fundingRate > 0 ? 'text-green-400' : 'text-red-400'}`}>{(w.fundingRate*100).toFixed(4)}%</td>
                            <td className="px-3 py-2">{w.fundingCategory}</td>
-                           <td className="px-3 py-2">{w.direction === 'LONG_HEAVY' ? '🔴 LONG_HVY' : w.direction === 'SHORT_HEAVY' ? '🟢 SHRT_HVY' : 'NEUTRAL'}</td>
-                           <td className="px-3 py-2">${(w.volume24h/1e6).toFixed(0)}M</td>
+                           <td className="px-3 py-2">
+                             <div className="flex flex-col">
+                               <span>{w.oiValue}</span>
+                               <span className={w.oiData?.oiChange1h > 0 ? 'text-green-400' : 'text-red-400'}>{w.oiChange1h}</span>
+                             </div>
+                           </td>
+                           <td className="px-3 py-2 text-[10px] leading-tight max-w-[80px]">
+                             {w.oiSignal?.type}
+                           </td>
+                           <td className="px-3 py-2">
+                             {w.oiData?.topTraderLsRatio > 1.2 ? '🟢' : w.oiData?.topTraderLsRatio < 0.8 ? '🔴' : '⚪'}
+                           </td>
                         </tr>
                       ))
                     )}
@@ -264,11 +275,54 @@ export default function EngineDashboard() {
                              Risk: {a.squeezeRisk}
                            </span>
                         </div>
-                        <div className="bg-black/40 border border-gray-800/50 p-2 rounded text-xs flex justify-between">
+                        <div className="bg-black/40 border border-gray-800/50 p-2 rounded text-xs flex justify-between mb-2">
                            <span className="text-gray-400">Bias:</span>
                            <span className={a.biasSide === 'PREFER_SHORT' ? 'text-red-400 font-bold' : a.biasSide === 'PREFER_LONG' ? 'text-green-400 font-bold' : 'text-gray-300'}>
                              {a.biasSide}
                            </span>
+                        </div>
+
+                        <div className="bg-blue-900/10 border border-blue-500/20 p-2 rounded flex flex-col gap-1.5 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-400">OI: {a.oiValue}</span>
+                            <span className={a.oiData?.oiChange1h > 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{a.oiChange1h} (1h)</span>
+                          </div>
+                          
+                          <div className={`text-center font-bold py-1 flex items-center justify-center gap-1 rounded ${
+                            a.oiSignal?.type.includes('SHORT_SQUEEZE') ? 'bg-red-500/20 text-red-500 animate-pulse' :
+                            a.oiSignal?.type.includes('LONG_SQUEEZE') ? 'bg-red-500/20 text-red-500 animate-pulse' :
+                            a.oiSignal?.type.includes('TREND_CONTINUATION') ? 'bg-green-500/20 text-green-500' :
+                            a.oiSignal?.type.includes('SHORT_COVERING') ? 'bg-yellow-500/20 text-yellow-500' :
+                            a.oiSignal?.type.includes('ACCUMULATION') ? 'bg-blue-500/20 text-blue-500' :
+                            a.oiSignal?.type.includes('DISTRIBUTION') ? 'bg-orange-500/20 text-orange-500' :
+                            'bg-gray-800 text-gray-400'
+                          }`}>
+                            {a.oiSignal?.type === 'SHORT_SQUEEZE_SETUP' ? '🚨 SHORT SQUEEZE' :
+                             a.oiSignal?.type === 'LONG_SQUEEZE_SETUP' ? '🚨 LONG SQUEEZE' :
+                             a.oiSignal?.type === 'TREND_CONTINUATION' ? '📈 TREND CONT.' :
+                             a.oiSignal?.type === 'SHORT_COVERING' ? '⚠️ SHORT COVER' :
+                             a.oiSignal?.type === 'ACCUMULATION' ? '📊 ACCUMULATION' :
+                             a.oiSignal?.type === 'DISTRIBUTION' ? '📉 DISTRIBUTION' :
+                             a.oiSignal?.type}
+                          </div>
+
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-gray-400">Smart $$$:</span>
+                            <span className={a.oiData?.topTraderLsRatio > 1.2 ? 'text-green-400' : a.oiData?.topTraderLsRatio < 0.8 ? 'text-red-400' : 'text-gray-400'}>
+                              {a.oiData?.topTraderLsRatio > 1.2 ? '↑ Longs' : a.oiData?.topTraderLsRatio < 0.8 ? '↓ Shorts' : 'Neutral'}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col mt-1">
+                            <div className="flex justify-between text-[10px] text-gray-500 mb-0.5">
+                              <span>Taker Flow (15m)</span>
+                              <span>{a.oiData ? (a.oiData.takerBuyRatio * 100).toFixed(0) : 50}% / {a.oiData ? (a.oiData.takerSellRatio * 100).toFixed(0) : 50}%</span>
+                            </div>
+                            <div className="w-full h-1.5 flex rounded-full overflow-hidden bg-gray-800">
+                              <div className="bg-green-500 h-full" style={{ width: `${a.oiData ? (a.oiData.takerBuyRatio * 100) : 50}%` }}></div>
+                              <div className="bg-red-500 h-full" style={{ width: `${a.oiData ? (a.oiData.takerSellRatio * 100) : 50}%` }}></div>
+                            </div>
+                          </div>
                         </div>
                      </div>
                   ))

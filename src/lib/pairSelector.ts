@@ -1,7 +1,50 @@
 import { prisma } from '../../lib/prisma';
+import { fetchOIDataRaw } from './binance';
 
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
 const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+function chunks<T>(arr: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+    arr.slice(i * size, i * size + size)
+  );
+}
+
+export type OISignalType = 
+  | 'TREND_CONTINUATION'
+  | 'SHORT_SQUEEZE_SETUP'
+  | 'LONG_SQUEEZE_SETUP'
+  | 'SHORT_COVERING'
+  | 'LONG_CAPITULATION'
+  | 'ACCUMULATION'
+  | 'DISTRIBUTION'
+  | 'NEUTRAL';
+
+export interface OISignal {
+  type: OISignalType;
+  strength: 1 | 2 | 3;
+  direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  description: string;
+}
+
+export interface OIData {
+  symbol: string;
+  currentOI: number;
+  currentOIValue: number;
+  oiChange1h: number;
+  oiChange4h: number;
+  oiChange24h: number;
+  oiTrend: 'RISING' | 'FALLING' | 'STABLE';
+  oiMomentum: number;
+  longRatio: number;
+  shortRatio: number;
+  lsRatio: number;
+  topTraderLsRatio: number;
+  takerBuyRatio: number;
+  takerSellRatio: number;
+  oiSignal: OISignal;
+}
 
 export interface PairData {
   symbol: string;
@@ -21,6 +64,10 @@ export interface ScoredPair extends PairData {
   squeezeRisk: 'HIGH' | 'MEDIUM' | 'LOW';
   score: number;
   tier: 'WATCHLIST' | 'ACTIVE' | 'EXCLUDED';
+  oiData: OIData;
+  oiSignal: OISignal;
+  oiValue: string;
+  oiChange1h: string;
 }
 
 export interface HunterResult {
@@ -31,6 +78,92 @@ export interface HunterResult {
   totalPassed: number;
   extremeCount: number;
   highCount: number;
+}
+
+function detectOISignal(oiData: OIData, priceChange: number, fundingRate: number): OISignal {
+  if (oiData.oiChange4h > 5 && priceChange < -1 && fundingRate < -0.0003 && oiData.topTraderLsRatio < 0.8) {
+    return { type: 'SHORT_SQUEEZE_SETUP', strength: 3, direction: 'BULLISH', description: "🚨 SHORT SQUEEZE SETUP: Massive short buildup + negative funding. Liquidation cascade upward imminent." };
+  }
+  if (oiData.oiChange4h > 5 && priceChange > 1 && fundingRate > 0.0003 && oiData.topTraderLsRatio > 1.5) {
+    return { type: 'LONG_SQUEEZE_SETUP', strength: 3, direction: 'BEARISH', description: "🚨 LONG SQUEEZE SETUP: Overleveraged longs + positive funding. Liquidation cascade downward imminent." };
+  }
+  if (oiData.oiChange4h < -8 && priceChange < -3 && oiData.takerSellRatio > 0.65) {
+    return { type: 'LONG_CAPITULATION', strength: 2, direction: 'BULLISH', description: "Potential reversal: Mass long liquidation. Exhaustion bottom possible." };
+  }
+  if (oiData.oiChange4h < -5 && priceChange > 0) {
+    return { type: 'DISTRIBUTION', strength: 2, direction: 'BEARISH', description: "Distribution: Smart money exiting into strength. Likely reversal coming." };
+  }
+  if (oiData.oiChange1h > 3 && priceChange > 1 && oiData.takerBuyRatio > 0.55) {
+    return { type: 'TREND_CONTINUATION', strength: 2, direction: 'BULLISH', description: "Strong trend: OI + price rising together. Longs in control." };
+  }
+  if (oiData.oiChange1h < -3 && priceChange > 1) {
+    return { type: 'SHORT_COVERING', strength: 1, direction: 'BULLISH', description: "⚠️ SHORT COVERING: Price up but OI falling. Shorts exiting, not new longs entering. Weak move." };
+  }
+  if (oiData.oiChange24h > 10 && Math.abs(priceChange) < 1 && Math.abs(fundingRate) < 0.0001) {
+    return { type: 'ACCUMULATION', strength: 1, direction: 'BULLISH', description: "Smart accumulation: OI building quietly. Big move incoming, direction unknown." };
+  }
+  return { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: "No clear signal" };
+}
+
+async function fetchOIData(symbol: string, priceChange: number, fundingRate: number): Promise<OIData> {
+  const { currentOI: curOI, oiHist, lsRatioAcc, topTraderPos, takerVol } = await fetchOIDataRaw(symbol);
+  
+  const currentOI = curOI?.openInterest ? parseFloat(curOI.openInterest) : 0;
+  
+  const hlen = oiHist?.length || 0;
+  const currentOIValue = hlen > 0 ? parseFloat(oiHist[hlen - 1].sumOpenInterestValue) : 0;
+  
+  const getChange = (barsBack: number) => {
+    if (hlen <= barsBack) return 0;
+    const pastOI = parseFloat(oiHist[hlen - 1 - barsBack].sumOpenInterest);
+    const curOICt = parseFloat(oiHist[hlen - 1].sumOpenInterest);
+    if (pastOI === 0) return 0;
+    return ((curOICt - pastOI) / pastOI) * 100;
+  };
+  
+  const oiChange1h = getChange(1);
+  const oiChange4h = getChange(4);
+  const oiChange24h = getChange(24);
+  
+  let oiTrend: 'RISING' | 'FALLING' | 'STABLE' = 'STABLE';
+  if (oiChange4h > 2) oiTrend = 'RISING';
+  else if (oiChange4h < -2) oiTrend = 'FALLING';
+
+  const llen = lsRatioAcc?.length || 0;
+  const lsRatio = llen > 0 ? parseFloat(lsRatioAcc[llen - 1].longShortRatio) : 1;
+  const longRatio = llen > 0 ? parseFloat(lsRatioAcc[llen - 1].longAccount) : 0.5;
+  const shortRatio = llen > 0 ? parseFloat(lsRatioAcc[llen - 1].shortAccount) : 0.5;
+
+  const tlen = topTraderPos?.length || 0;
+  const topTraderLsRatio = tlen > 0 ? parseFloat(topTraderPos[tlen - 1].longShortRatio) : 1;
+
+  const vlen = takerVol?.length || 0;
+  const takerBuyVol = vlen > 0 ? parseFloat(takerVol[vlen - 1].buyVol) : 0;
+  const takerSellVol = vlen > 0 ? parseFloat(takerVol[vlen - 1].sellVol) : 0;
+  const totalTaker = takerBuyVol + takerSellVol;
+  const takerBuyRatio = totalTaker > 0 ? takerBuyVol / totalTaker : 0.5;
+  const takerSellRatio = totalTaker > 0 ? takerSellVol / totalTaker : 0.5;
+
+  const oiData: OIData = {
+    symbol,
+    currentOI,
+    currentOIValue,
+    oiChange1h,
+    oiChange4h,
+    oiChange24h,
+    oiTrend,
+    oiMomentum: oiChange1h - (oiChange4h / 4),
+    longRatio,
+    shortRatio,
+    lsRatio,
+    topTraderLsRatio,
+    takerBuyRatio,
+    takerSellRatio,
+    oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'No signal' }
+  };
+
+  oiData.oiSignal = detectOISignal(oiData, priceChange, fundingRate);
+  return oiData;
 }
 
 export async function runDynamicHunter(): Promise<HunterResult> {
@@ -76,8 +209,19 @@ export async function runDynamicHunter(): Promise<HunterResult> {
 
   const totalPassed = validPairs.length;
 
+  // FETCH OI DATA FOR TOP 50 PAIRS
+  validPairs.sort((a,b) => b.volume24h - a.volume24h);
+  const topValidPairs = validPairs.slice(0, 50);
+
+  const oiDataMap = new Map<string, OIData>();
+  for (const batch of chunks(topValidPairs, 10)) {
+    const results = await Promise.all(batch.map(p => fetchOIData(p.symbol, p.priceChange24h, p.fundingRate)));
+    results.forEach(r => oiDataMap.set(r.symbol, r));
+    await sleep(100);
+  }
+
   // STEP 3 - SCORE EVERY PAIR
-  const scoredPairs: ScoredPair[] = validPairs.map(p => {
+  const scoredPairs: ScoredPair[] = topValidPairs.map(p => {
     const absFR = Math.abs(p.fundingRate);
     let score = absFR * 100000;
 
@@ -111,6 +255,20 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     else if (absFR > 0.0005) { fundingCategory = 'HIGH'; score *= 1.5; }
     else if (absFR > 0.0001) { fundingCategory = 'MODERATE'; }
 
+    const oiData = oiDataMap.get(p.symbol)!;
+    const oiSignal = oiData.oiSignal;
+    
+    // OI bonus/penalty to existing score
+    let oiBonus = 0;
+    if (oiSignal.type === 'SHORT_SQUEEZE_SETUP') oiBonus = +50;
+    if (oiSignal.type === 'LONG_SQUEEZE_SETUP') oiBonus = +50;
+    if (oiSignal.type === 'TREND_CONTINUATION') oiBonus = +20;
+    if (oiSignal.type === 'ACCUMULATION') oiBonus = +10;
+    if (oiSignal.type === 'SHORT_COVERING') oiBonus = -10;
+    if (oiSignal.type === 'DISTRIBUTION') oiBonus = -20;
+    
+    score += (oiBonus * oiSignal.strength);
+
     return {
       ...p,
       absFundingRate: absFR,
@@ -119,13 +277,25 @@ export async function runDynamicHunter(): Promise<HunterResult> {
       biasSide,
       squeezeRisk,
       score,
-      tier: 'EXCLUDED'
+      tier: 'EXCLUDED',
+      oiData,
+      oiSignal,
+      oiValue: `$${(oiData.currentOIValue / 1e9).toFixed(2)}B`,
+      oiChange1h: `${oiData.oiChange1h > 0 ? '+' : ''}${oiData.oiChange1h.toFixed(2)}%`
     };
   });
 
   // STEP 4 - BUILD WATCHLIST
   scoredPairs.sort((a, b) => b.score - a.score);
-  const watchlist = scoredPairs.slice(0, 20).map(p => ({ ...p, tier: 'WATCHLIST' as const }));
+  
+  // Apply Special OI Override
+  let watchlistRaw: ScoredPair[] = [];
+  const squeezePairs = scoredPairs.filter(p => p.oiSignal.type === 'SHORT_SQUEEZE_SETUP' || p.oiSignal.type === 'LONG_SQUEEZE_SETUP');
+  const normalPairs = scoredPairs.filter(p => !squeezePairs.map(s => s.symbol).includes(p.symbol));
+  
+  watchlistRaw = [...squeezePairs, ...normalPairs].slice(0, 20);
+
+  const watchlist = watchlistRaw.map(p => ({ ...p, tier: 'WATCHLIST' as const }));
 
   await prisma.appSettings.upsert({
     where: { key: 'hunter_watchlist' },
@@ -142,9 +312,13 @@ export async function runDynamicHunter(): Promise<HunterResult> {
 
   // STEP 5 - SELECT ACTIVE TRADING PAIRS
   let eligibleActive = watchlist.filter(p => 
-    (p.squeezeRisk === 'LOW' || p.squeezeRisk === 'MEDIUM') &&
-    p.volume24h > 50_000_000 &&
-    (p.fundingCategory === 'EXTREME' || p.fundingCategory === 'HIGH')
+    p.oiSignal.type === 'SHORT_SQUEEZE_SETUP' || 
+    p.oiSignal.type === 'LONG_SQUEEZE_SETUP' || 
+    (
+      (p.squeezeRisk === 'LOW' || p.squeezeRisk === 'MEDIUM') &&
+      p.volume24h > 50_000_000 &&
+      (p.fundingCategory === 'EXTREME' || p.fundingCategory === 'HIGH')
+    )
   );
 
   const finalActive: ScoredPair[] = [];
