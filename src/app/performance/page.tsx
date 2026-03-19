@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Activity } from "lucide-react";
 import { usePerformanceData } from "@/hooks/usePerformanceData";
@@ -13,6 +13,28 @@ const EquityChartComponent = dynamic(() => import("@/components/EquityChart"), {
   ssr: false,
   loading: () => <div className="h-[320px] bg-[#0E1628] animate-pulse rounded-xl" />
 });
+
+class ErrorBoundary extends React.Component<any, { hasError: boolean, error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-10 bg-red-500/10 border border-red-500 text-white rounded my-10 max-w-4xl mx-auto overflow-x-auto">
+          <h2 className="text-xl font-bold mb-4">Performance Render Error</h2>
+          <pre className="text-xs">{this.state.error?.message || String(this.state.error)}</pre>
+          <pre className="text-xs mt-4 text-gray-400">{this.state.error?.stack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function PerformancePage() {
   const { loading, summary, heatmap, breakdown, stats } = usePerformanceData();
@@ -38,11 +60,12 @@ export default function PerformancePage() {
 
   const { byCrypto, byIDX, bestTrade, worstTrade, bestMonth, worstMonth, avgTradesPerWeek, mostActiveDay, mostActiveHour, totalTradingDays } = breakdown;
   
-  const totalCryptoIdxTrades = byCrypto.trades + byIDX.trades;
-  const cryptoPct = totalCryptoIdxTrades > 0 ? (byCrypto.trades / totalCryptoIdxTrades) * 100 : 0;
-  const idxPct = totalCryptoIdxTrades > 0 ? (byIDX.trades / totalCryptoIdxTrades) * 100 : 0;
+  const totalCryptoIdxTrades = (byCrypto?.trades || 0) + (byIDX?.trades || 0);
+  const cryptoPct = totalCryptoIdxTrades > 0 ? ((byCrypto?.trades || 0) / totalCryptoIdxTrades) * 100 : 0;
+  const idxPct = totalCryptoIdxTrades > 0 ? ((byIDX?.trades || 0) / totalCryptoIdxTrades) * 100 : 0;
 
   return (
+    <ErrorBoundary>
     <div className="space-y-6 w-full max-w-[1600px] mx-auto pb-10">
       
       <div className="flex items-center gap-2 mb-2">
@@ -229,6 +252,7 @@ export default function PerformancePage() {
       </div>
 
     </div>
+    </ErrorBoundary>
   );
 }
 

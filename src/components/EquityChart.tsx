@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createChart, ColorType, IChartApi, ISeriesApi } from "lightweight-charts";
+import { createChart, ColorType, IChartApi, ISeriesApi, AreaSeries } from "lightweight-charts";
 
 export function EquityChartComponent({ data }: { data: { time: string, value: number }[] }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +53,7 @@ export function EquityChartComponent({ data }: { data: { time: string, value: nu
     });
 
     // @ts-ignore
-    const areaSeries = chart.addAreaSeries({
+    const areaSeries = chart.addSeries(AreaSeries, {
       lineColor: "#00D4AA",
       topColor: "rgba(0, 212, 170, 0.4)",
       bottomColor: "rgba(0, 212, 170, 0.0)",
