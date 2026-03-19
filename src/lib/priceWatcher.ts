@@ -82,24 +82,25 @@ export async function runPriceWatcher(): Promise<void> {
 
       // MOMENTUM_CONTINUATION
       const last3 = klines15m.slice(-3);
-      const isAllGreen = last3.every(c => c.close > c.open);
-      const isAllRed = last3.every(c => c.close < c.open);
+      const greenCount = last3.filter(c => c.close > c.open).length;
+      const redCount = last3.filter(c => c.close < c.open).length;
+      const isDominatedMatch = greenCount >= 2 || redCount >= 2;
       const bodyRatios = last3.map(c => Math.abs(c.close - c.open) / (c.high - c.low || 1));
-      const hasBigBodies = bodyRatios.every(r => r > 0.6);
-      const increasingVol = last3[0].volume < last3[1].volume && last3[1].volume < last3[2].volume;
-      const momentumContinuation = (isAllGreen || isAllRed) && hasBigBodies && increasingVol;
+      const hasBigBodies = bodyRatios.every(r => r > 0.5);
+      const increasingVol = last3[1].volume < last3[2].volume || last3[0].volume < last3[2].volume;
+      const momentumContinuation = isDominatedMatch && hasBigBodies && increasingVol;
 
       let trigger: TriggerResult | null = null;
 
       // 1. BREAKOUT
-      if (markPrice > high2h * 1.0015 || markPrice < low2h * 0.9985) {
+      if (markPrice > high2h * 1.001 || markPrice < low2h * 0.999) {
          trigger = { triggered: true, symbol, triggerType: 'BREAKOUT', strength: 3 };
       }
       // 2. VOLUME SPIKE
-      else if (currentVol > avgVol * 4.0) {
+      else if (currentVol > avgVol * 3.0) {
          trigger = { triggered: true, symbol, triggerType: 'VOLUME_SPIKE', strength: 3 };
       }
-      else if (currentVol > avgVol * 2.0) {
+      else if (currentVol > avgVol * 1.7) {
          trigger = { triggered: true, symbol, triggerType: 'VOLUME_SPIKE', strength: 2 };
       }
       // 3. MOMENTUM_CONTINUATION
@@ -120,12 +121,19 @@ export async function runPriceWatcher(): Promise<void> {
       else if (prevRsi > 70 && currRsi <= 70) {
          trigger = { triggered: true, symbol, triggerType: 'RSI_REVERSAL', strength: 2 };
       }
-      // 6. FUNDING RATE EXTREME
+      // 6. RSI MOMENTUM
+      else if (prevRsi < 55 && currRsi >= 55) {
+         trigger = { triggered: true, symbol, triggerType: 'RSI_MOMENTUM', strength: 1 };
+      }
+      else if (prevRsi > 45 && currRsi <= 45) {
+         trigger = { triggered: true, symbol, triggerType: 'RSI_MOMENTUM', strength: 1 };
+      }
+      // 7. FUNDING RATE EXTREME
       else if (fundingRate > 0.05 || fundingRate < -0.05) {  
          trigger = { triggered: true, symbol, triggerType: 'FUNDING_EXTREME', strength: 1 };
       }
       
-      // 7. SCHEDULED FALLBACK
+      // 8. SCHEDULED FALLBACK
       const cooldownKey = `last_ai_call_${symbol}`;
       const lastCallSetting = await prisma.appSettings.findUnique({ where: { key: cooldownKey } });
       const lastCallTime = lastCallSetting ? new Date(lastCallSetting.value).getTime() : 0;
@@ -138,7 +146,7 @@ export async function runPriceWatcher(): Promise<void> {
 
       if (trigger) {
          let cooldownMinutes = 15; 
-         if (trigger.triggerType === 'EMA_CROSS' || trigger.triggerType === 'RSI_REVERSAL') cooldownMinutes = 20;
+         if (trigger.triggerType === 'EMA_CROSS' || trigger.triggerType === 'RSI_REVERSAL' || trigger.triggerType === 'RSI_MOMENTUM') cooldownMinutes = 20;
          else if (trigger.triggerType === 'FUNDING_EXTREME') cooldownMinutes = 30;
          else if (trigger.triggerType === 'SCHEDULED_FALLBACK') cooldownMinutes = 60;
 

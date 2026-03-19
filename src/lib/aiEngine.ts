@@ -206,7 +206,8 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
 
   // 3E: Market Regime Cache
   const isRegimeEnabled = process.env.ENGINE_MARKET_REGIME_CACHE === 'true';
-  if (isRegimeEnabled) {
+  const isTestMode = process.env.ENGINE_TEST_MODE === 'true';
+  if (isRegimeEnabled && !isTestMode) {
     const emaDiv = Math.abs(ema20_4h - ema50_4h) / markPriceObj.markPrice;
     const currentRegime = (adx_4h > 25 && emaDiv > 0.005) ? 'TRENDING' : 'RANGING';
     
@@ -215,13 +216,16 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
     if (setting && setting.value) {
       const cache = JSON.parse(setting.value);
       const hoursDiff = (Date.now() - new Date(cache.updatedAt).getTime()) / 3600000;
-      if (hoursDiff < 2 && cache.regime === 'RANGING') {
+      
+      const isFallbackTrigger = triggerData && triggerData.triggerType === 'SCHEDULED_FALLBACK';
+
+      if (hoursDiff < 1 && cache.regime === 'RANGING' && isFallbackTrigger) {
          console.log(`[REGIME-SKIP] ${symbol} is RANGING from cache.`);
          return {
             symbol, action: 'SKIP', confidence: 0, reasoning: 'Cached RANGING regime.',
             entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, keySignal: 'N/A', estimatedDuration: null, analyzedAt: new Date()
          };
-      } else if (hoursDiff >= 2) {
+      } else if (hoursDiff >= 1) {
          await prisma.appSettings.update({ where: { key: regimeKey }, data: { value: JSON.stringify({ regime: currentRegime, updatedAt: new Date().toISOString() }) } });
       }
     } else {
@@ -231,14 +235,7 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
 
   // 3A: Pre-filter before AI call
   const isPrefilterEnabled = process.env.ENGINE_PREFILTER_ENABLED === 'true';
-  if (isPrefilterEnabled) {
-    if (parseFloat(adx_1h) <= 20 || vol_15m.ratio <= 0.8 || parseFloat(rsi_1h) < 22 || parseFloat(rsi_1h) > 78) {
-       console.log(`[PREFILTER-SKIP] ${symbol} — no AI call`);
-       return {
-          symbol, action: 'SKIP', confidence: 0, reasoning: 'Failed pre-flight TA conditions.',
-          entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, keySignal: 'TA Filters', estimatedDuration: null, analyzedAt: new Date()
-       };
-    }
+  if (isPrefilterEnabled && !isTestMode) {
     const openPos = await prisma.trade.findMany({ where: { symbol, status: 'OPEN' } });
     for (const pos of openPos) {
       const diff = Math.abs(pos.entryPrice - markPriceObj.markPrice) / markPriceObj.markPrice;

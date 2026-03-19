@@ -66,8 +66,17 @@ export default function EngineDashboard() {
   const handleAction = async (endpoint: string) => {
     setActionLoading(true);
     try {
-      await fetch(`/api/engine/${endpoint}`, { method: 'POST' });
-      await fetchStatus();
+      if (endpoint === 'test-trade') {
+         const res = await fetch(`/api/engine/test-trade`, { method: 'POST' });
+         const data = await res.json();
+         if (!res.ok) throw new Error(data.error || 'Test trade failed');
+         alert('✅ Test trade injected. Check Active Positions soon.');
+      } else {
+         await fetch(`/api/engine/${endpoint}`, { method: 'POST' });
+         await fetchStatus();
+      }
+    } catch (e: any) {
+         alert(e.message);
     } finally {
       setActionLoading(false);
     }
@@ -137,6 +146,13 @@ export default function EngineDashboard() {
             className="flex items-center gap-2 px-6 py-2.5 bg-blue-500/10 text-blue-500 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-all font-medium disabled:opacity-50"
           >
             <RefreshCcw className="w-4 h-4" /> RUN CYCLE NOW
+          </button>
+          <button 
+            onClick={() => handleAction('test-trade')}
+            disabled={actionLoading}
+            className="flex items-center gap-2 px-6 py-2.5 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/20 transition-all font-medium disabled:opacity-50"
+          >
+            <Zap className="w-4 h-4" /> 🧪 TEST TRADE
           </button>
         </div>
       </div>

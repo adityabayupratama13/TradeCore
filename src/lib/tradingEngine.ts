@@ -141,9 +141,18 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
   cycleNumber++;
 
   try {
+    const isTestMode = process.env.ENGINE_TEST_MODE === 'true';
+    if (isTestMode) {
+       const testFired = await prisma.appSettings.findUnique({ where: { key: 'test_trade_fired' } });
+       if (testFired) {
+          console.log('[TEST MODE] Blocked - engine already executed 1 test trade. Set ENGINE_TEST_MODE=false to resume live trading.');
+          return;
+       }
+    }
+
     const enabledSetting = await prisma.appSettings.findUnique({ where: { key: 'ENGINE_ENABLED' } });
     const isEngineStr = process.env.ENGINE_ENABLED || (enabledSetting ? enabledSetting.value : 'false');
-    if (isEngineStr !== 'true') return;
+    if (isEngineStr !== 'true' && !isTestMode) return;
 
     // ADDITION 1: ANTI-OVERTRADING GUARD
     // 1. MAX TRADES PER DAY
@@ -263,10 +272,30 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       }
     });
 
-    if (signal.action === 'SKIP' || signal.confidence < 65) {
-      const skipReason = signal.action === 'SKIP' ? `AI SKIP: ${signal.reasoning}` : `Low confidence: ${signal.confidence}`;
-      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: skipReason });
+    let positionSizeMult = 1.0;
+    
+    if (signal.action === 'SKIP') {
+      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `AI SKIP: ${signal.reasoning}` });
       return;
+    }
+
+    if (isTestMode) {
+      if (signal.confidence < 50) {
+         await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Test mode low confidence: ${signal.confidence}` });
+         return;
+      }
+      signal.leverage = 1;
+      positionSizeMult = 1.0; 
+    } else {
+      if (signal.confidence >= 60) {
+        positionSizeMult = 1.0;
+      } else if (signal.confidence >= 55) {
+        positionSizeMult = 0.5;
+        signal.leverage = 1;
+      } else {
+        await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Low confidence (Threshold 55): ${signal.confidence}` });
+        return;
+      }
     }
 
     if (!signal.entryPrice || !signal.stopLoss || !signal.takeProfit) {
@@ -277,9 +306,16 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const slDistance = Math.abs(signal.entryPrice - signal.stopLoss);
     if (slDistance === 0) return;
 
-    const maxRiskPct = 2; 
+    const maxRiskPct = 2 * positionSizeMult; 
     const riskAmountUsdt = availableBalance * (maxRiskPct / 100);
+    
     let quantity = riskAmountUsdt / slDistance;
+
+    if (isTestMode) {
+       const minQty = 10 / signal.entryPrice;
+       quantity = Math.max(quantity, minQty);
+    }
+    
     quantity = Math.floor(quantity * 1000) / 1000;
 
     const notionalValue = quantity * signal.entryPrice;
@@ -339,6 +375,10 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
          update: { value: new Date().toISOString() },
          create: { key: 'last_trade_executed_at', value: new Date().toISOString() }
       });
+      
+      if (isTestMode) {
+         await prisma.appSettings.create({ data: { key: 'test_trade_fired', value: 'true' } });
+      }
 
     } catch (execErr: any) {
       await logEngine({ symbol, action: signal.action, signal, result: 'ERROR', reason: execErr.message });

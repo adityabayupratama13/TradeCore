@@ -182,6 +182,9 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
 }
 
 export async function runDynamicHunter(): Promise<HunterResult> {
+  console.log('🦅 Hunter: Starting scan...');
+  console.log('📋 SAFE_UNIVERSE contains:', SAFE_UNIVERSE.length, 'coins');
+
   const [fundingRes, tickerRes] = await Promise.all([
     fetch(`${BINANCE_BASE_URL}/fapi/v1/premiumIndex`),
     fetch(`${BINANCE_BASE_URL}/fapi/v1/ticker/24hr`)
@@ -212,17 +215,27 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   const totalScanned = rawPairs.length;
   
   // STEP 2 - HARD FILTERS
-  const validPairs = rawPairs.filter(p => {
-    if (!SAFE_UNIVERSE.includes(p.symbol)) return false;
+  const afterWhitelist = rawPairs.filter(p => SAFE_UNIVERSE.includes(p.symbol));
+  const afterVolume = afterWhitelist.filter(p => p.volume24h >= 100_000_000);
+  const afterFunding = afterVolume.filter(p => Math.abs(p.fundingRate) <= 0.005);
+  
+  const validPairs = afterFunding.filter(p => {
     if (!p.symbol.endsWith('USDT')) return false;
     if (['USDC', 'BUSD', 'TUSD', 'DAI'].some(stable => p.symbol.includes(stable))) return false;
     if (INDEX_SYMBOLS.includes(p.symbol)) return false;
     if (p.markPrice < 0.01) return false;
-    if (p.volume24h < 100_000_000) return false;
-    if (Math.abs(p.fundingRate) > 0.005) return false;
     if (p.fundingRate === 0 && p.priceChange24h === 0) return false;
     return true;
   });
+
+  console.log(`After SAFE_UNIVERSE filter: ${afterWhitelist.length} pairs`);
+  console.log(`After volume filter: ${afterVolume.length} pairs`);
+  console.log(`After funding rate cap: ${afterFunding.length} pairs`);
+  console.log(`Final candidates: ${validPairs.length} pairs`);
+
+  if (validPairs.some(p => p.symbol === 'COMMONUSDT' || p.symbol === 'TOKENUSDT')) {
+    console.error('🚨 UNSAFE COIN SLIPPED THROUGH:', validPairs.find(p => p.symbol === 'COMMONUSDT' || p.symbol === 'TOKENUSDT')?.symbol);
+  }
 
   const totalPassed = validPairs.length;
 
