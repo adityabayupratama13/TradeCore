@@ -1,22 +1,9 @@
 import { prisma } from '../../lib/prisma';
 import { fetchOIDataRaw } from './binance';
+import { SAFE_UNIVERSE } from './constants';
 
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
 const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
-
-const SAFE_UNIVERSE = new Set([
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT',
-  'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT',
-  'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'LTCUSDT',
-  'UNIUSDT', 'ATOMUSDT', 'NEARUSDT', 'APTUSDT',
-  'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT',
-  'SEIUSDT', 'TIAUSDT', 'PYTHUSDT', 'WIFUSDT',
-  'PEPEUSDT', 'FLOKIUSDT', 'BONKUSDT', 'FETUSDT',
-  'RENDERUSDT', 'TAOUSDT', 'WLDUSDT', 'JUPUSDT',
-  'STRKUSDT', 'DYMUSDT', 'ALTUSDT', 'EIGENUSDT',
-  'MOVEUSDT', 'MEUSDT', 'PNUTUSDT', 'ACTUSDT',
-  'ENAUSDT', 'NEIROUSDT', 'TURBOUSDT', 'KAIAUSDT',
-]);
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 function chunks<T>(arr: T[], size: number): T[][] {
@@ -213,24 +200,23 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     }
   });
 
-  // First filter — before anything else:
-  const safeCoins = rawPairs.filter(p => SAFE_UNIVERSE.has(p.symbol));
-
-  console.log(`Total pairs: ${rawPairs.length}`);
-  console.log(`After SAFE_UNIVERSE: ${safeCoins.length} pairs`);
-  console.log(`Excluded: ${rawPairs.length - safeCoins.length} pairs`);
-
-  // Explicitly log if dangerous coin somehow passes:
-  rawPairs.forEach(p => {
-    if (!SAFE_UNIVERSE.has(p.symbol) && Math.abs(p.fundingRate) > 0.001) {
-      console.log(`🚫 BLOCKED dangerous coin: ${p.symbol} funding ${parseFloat(String(p.fundingRate)).toFixed(4)}`);
+  // IMMEDIATE FILTER — before anything else
+  const safePairs = rawPairs.filter(p => {
+    const isSafe = SAFE_UNIVERSE.has(p.symbol);
+    if (!isSafe) {
+      if (Math.abs(p.fundingRate) > 0.001) {
+        console.log(`🚫 Blocked: ${p.symbol} (${(p.fundingRate * 100).toFixed(4)}%) not in SAFE_UNIVERSE`);
+      }
     }
+    return isSafe;
   });
+  
+  console.log(`Hunter: ${rawPairs.length} total → ${safePairs.length} safe pairs`);
 
   const totalScanned = rawPairs.length;
   
   // STEP 2 - HARD FILTERS
-  const afterVolume = safeCoins.filter(p => p.volume24h >= 100_000_000);
+  const afterVolume = safePairs.filter(p => p.volume24h >= 100_000_000);
   const afterFunding = afterVolume.filter(p => Math.abs(p.fundingRate) <= 0.005);
   
   const validPairs = afterFunding.filter(p => {

@@ -8,6 +8,68 @@ function sign(queryString: string): string {
   return CryptoJS.HmacSHA256(queryString, SECRET).toString(CryptoJS.enc.Hex);
 }
 
+export interface SymbolPrecision {
+  symbol: string;
+  pricePrecision: number;
+  quantityPrecision: number;
+  minQty: number;
+  minNotional: number;
+  tickSize: number;
+  stepSize: number;
+}
+
+const symbolPrecisionCache = new Map<string, SymbolPrecision>();
+let lastExchangeInfoFetch = 0;
+
+export async function getSymbolPrecision(symbol: string): Promise<SymbolPrecision> {
+  const now = Date.now();
+  if (!symbolPrecisionCache.has(symbol) || now - lastExchangeInfoFetch > 24 * 60 * 60 * 1000) {
+    try {
+      const res = await fetch(`${BASE_URL}/fapi/v1/exchangeInfo`).then(r => r.json());
+      for (const s of res.symbols) {
+        const priceFilter = s.filters.find((f: any) => f.filterType === 'PRICE_FILTER');
+        const lotSize = s.filters.find((f: any) => f.filterType === 'LOT_SIZE');
+        const minNotional = s.filters.find((f: any) => f.filterType === 'MIN_NOTIONAL');
+
+        symbolPrecisionCache.set(s.symbol, {
+          symbol: s.symbol,
+          pricePrecision: s.pricePrecision,
+          quantityPrecision: s.quantityPrecision,
+          minQty: lotSize ? parseFloat(lotSize.minQty) : 0,
+          minNotional: minNotional ? parseFloat(minNotional.notional) : 0,
+          tickSize: priceFilter ? parseFloat(priceFilter.tickSize) : 0,
+          stepSize: lotSize ? parseFloat(lotSize.stepSize) : 0
+        });
+      }
+      lastExchangeInfoFetch = now;
+    } catch (err) {
+      console.error('Failed to fetch exchangeInfo', err);
+    }
+  }
+  
+  return symbolPrecisionCache.get(symbol) || {
+    symbol, pricePrecision: 4, quantityPrecision: 3, minQty: 0, minNotional: 0, tickSize: 0.0001, stepSize: 0.001
+  };
+}
+
+export async function roundPrice(symbol: string, price: number): Promise<number> {
+  const precision = await getSymbolPrecision(symbol);
+  const tickSize = precision.tickSize;
+  if (!tickSize) return parseFloat(price.toFixed(precision.pricePrecision));
+  
+  const rounded = Math.round(price / tickSize) * tickSize;
+  return parseFloat(rounded.toFixed(precision.pricePrecision));
+}
+
+export async function roundQuantity(symbol: string, qty: number): Promise<number> {
+  const precision = await getSymbolPrecision(symbol);
+  const stepSize = precision.stepSize;
+  if (!stepSize) return parseFloat(qty.toFixed(precision.quantityPrecision));
+
+  const rounded = Math.floor(qty / stepSize) * stepSize;
+  return parseFloat(rounded.toFixed(precision.quantityPrecision));
+}
+
 async function fetchBinance(endpoint: string, method: string = 'GET', data: any = {}) {
   const timestamp = Date.now();
   const params = new URLSearchParams({ ...data, timestamp: String(timestamp) }).toString();
@@ -252,6 +314,15 @@ export async function enterTrade(params: {
   stopLoss: number,
   takeProfit: number
 }) {
+  const roundedQty = await roundQuantity(params.symbol, params.quantity);
+  const roundedSL = await roundPrice(params.symbol, params.stopLoss);
+  const roundedTP = await roundPrice(params.symbol, params.takeProfit);
+  
+  const precision = await getSymbolPrecision(params.symbol);
+  if (roundedQty < precision.minQty) {
+    throw new Error(`Quantity ${roundedQty} below minimum ${precision.minQty}`);
+  }
+
   await setMarginType(params.symbol, 'ISOLATED');
   await setLeverage(params.symbol, params.leverage);
 
@@ -260,7 +331,7 @@ export async function enterTrade(params: {
     symbol: params.symbol,
     side: params.side,
     type: 'MARKET',
-    quantity: params.quantity
+    quantity: roundedQty
   });
 
   const oppositeSide = getOppositeSide(params.side);
@@ -271,8 +342,8 @@ export async function enterTrade(params: {
   const slOrder = await placeProtectOrder({
     symbol: params.symbol,
     side: oppositeSide,
-    quantity: params.quantity,
-    stopPrice: params.stopLoss,
+    quantity: roundedQty,
+    stopPrice: roundedSL,
     isStopLoss: true
   });
 
@@ -282,8 +353,8 @@ export async function enterTrade(params: {
   const tpOrder = await placeProtectOrder({
     symbol: params.symbol,
     side: oppositeSide,
-    quantity: params.quantity,
-    stopPrice: params.takeProfit,
+    quantity: roundedQty,
+    stopPrice: roundedTP,
     isStopLoss: false
   });
 

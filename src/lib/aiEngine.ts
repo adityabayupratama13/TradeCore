@@ -1,5 +1,51 @@
-import { getKlines, getMarkPrice, get24hrTicker, getOrderBook, Kline } from './binance';
+import { getKlines, getMarkPrice, get24hrTicker, getOrderBook, Kline, roundPrice } from './binance';
 import { prisma } from '../../lib/prisma';
+
+function validateAndFixSignal(
+  signal: any, 
+  symbol: string,
+  currentPrice: number,
+  atr: number
+): any {
+  if (signal.action !== 'SKIP') {
+    if (!signal.stopLoss || signal.stopLoss === null) {
+      console.log(`⚠️ AI missing SL for ${symbol}, auto-calculating from ATR`);
+      if (signal.action === 'LONG') {
+        signal.stopLoss = currentPrice - (atr * 1.5);
+      } else {
+        signal.stopLoss = currentPrice + (atr * 1.5);
+      }
+    }
+    
+    if (!signal.takeProfit || signal.takeProfit === null) {
+      console.log(`⚠️ AI missing TP for ${symbol}, auto-calculating 2.5x SL distance`);
+      const slDist = Math.abs(currentPrice - signal.stopLoss);
+      if (signal.action === 'LONG') {
+        signal.takeProfit = currentPrice + (slDist * 2.5);
+      } else {
+        signal.takeProfit = currentPrice - (slDist * 2.5);
+      }
+    }
+    
+    if (!signal.entryPrice || signal.entryPrice === null) {
+      signal.entryPrice = currentPrice;
+    }
+    
+    if (!signal.leverage || signal.leverage === null) {
+      signal.leverage = 1;
+    }
+  }
+  return signal;
+}
+
+async function roundSignalPrices(signal: any, symbol: string) {
+  if (signal.action !== 'SKIP') {
+    if (signal.entryPrice) signal.entryPrice = await roundPrice(symbol, signal.entryPrice);
+    if (signal.stopLoss) signal.stopLoss = await roundPrice(symbol, signal.stopLoss);
+    if (signal.takeProfit) signal.takeProfit = await roundPrice(symbol, signal.takeProfit);
+  }
+  return signal;
+}
 
 function enforceMinRR(signal: any): any {
   if (signal.action === 'SKIP') return signal;
@@ -226,6 +272,7 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
   const ema50_15m = calculateEMA(d15m.close, 50).pop()?.toFixed(4);
   const rsi_15m = calculateRSI(d15m.close, 14).toFixed(2);
   const macd_15m = calculateMACD(d15m.close);
+  const atr_15m = calculateATR(d15m.high, d15m.low, d15m.close, 14);
   const adx_15m = calculateADX(d15m.high, d15m.low, d15m.close, 14).toFixed(2);
   const vol_15m = calculateVolumeProfile(d15m.volume);
   const bb_15m = calculateBollingerBands(d15m.close, 20);
@@ -516,7 +563,9 @@ JSON only, no markdown:
       analyzedAt: new Date()
     };
 
+    finalSignalObj = validateAndFixSignal(finalSignalObj, symbol, markPriceObj.markPrice, atr_15m);
     finalSignalObj = enforceMinRR(finalSignalObj);
+    finalSignalObj = await roundSignalPrices(finalSignalObj, symbol);
     return finalSignalObj;
   } catch (error) {
     console.error(`AI Analysis Failed for ${symbol}`, error);

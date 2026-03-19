@@ -2,6 +2,7 @@ import { getKlines, getMarkPrice } from './binance';
 import { prisma } from '../../lib/prisma';
 import { executeAIAndTrade } from './tradingEngine';
 import { calculateEMA, calculateRSI, calculateVolumeProfile } from './aiEngine';
+import { SAFE_UNIVERSE } from './constants';
 
 export interface TriggerResult {
   triggered: boolean;
@@ -14,13 +15,15 @@ async function getActivePairs() {
   const setting = await prisma.appSettings.findUnique({
     where: { key: 'active_trading_pairs' }
   });
-  if (!setting?.value) return [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
   
-  try {
-    return JSON.parse(setting.value);
-  } catch (e) {
-    return [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
+  let pairs = [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
+  if (setting?.value) {
+    try {
+      pairs = JSON.parse(setting.value);
+    } catch (e) {}
   }
+  
+  return pairs.filter((p: any) => SAFE_UNIVERSE.has(p.symbol));
 }
 
 export async function runPriceWatcher(): Promise<void> {

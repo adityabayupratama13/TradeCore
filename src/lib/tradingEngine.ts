@@ -1,16 +1,10 @@
-import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines } from './binance';
+import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision } from './binance';
 import { analyzeMarket, calculateATR } from './aiEngine';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
-
-const TRADING_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
-  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT', 
-  'LTCUSDT', 'BCHUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 
-  'OPUSDT', 'INJUSDT', 'RNDRUSDT', 'SUIUSDT', 'PEPEUSDT'
-];
+import { MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
 
 let cycleNumber = 0;
 
@@ -325,6 +319,14 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
        const reductionFactor = (availableBalance * 0.5) / marginRequired;
        quantity = Math.floor((quantity * reductionFactor) * 1000) / 1000;
        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⚠️ Position too large — auto-reducing to 50% of available margin for ${symbol}` } } as any);
+    }
+
+    const precision = await getSymbolPrecision(symbol);
+    const orderValue = signal.entryPrice * quantity;
+    if (orderValue < precision.minNotional) {
+       const minQty = Math.ceil(precision.minNotional / signal.entryPrice / precision.stepSize) * precision.stepSize;
+       quantity = Math.max(quantity, minQty);
+       console.log(`📊 Adjusted qty to meet min notional: ${quantity}`);
     }
 
     if (quantity <= 0) {

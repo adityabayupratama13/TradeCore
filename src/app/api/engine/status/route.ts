@@ -2,13 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { getEngineStatus } from '../../../../../src/lib/engineScheduler';
 import { getPositions, getOpenOrders } from '../../../../../src/lib/binance';
-
-const TRADING_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
-  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT', 
-  'LTCUSDT', 'BCHUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 
-  'OPUSDT', 'INJUSDT', 'RNDRUSDT', 'SUIUSDT', 'PEPEUSDT'
-];
+import { SAFE_UNIVERSE } from '../../../../../src/lib/constants';
 
 export async function GET() {
   try {
@@ -23,7 +17,16 @@ export async function GET() {
     const lastWatcherTime = lastRunRaw?.value ? new Date(lastRunRaw.value).getTime() : 0;
     const globalLastCheckSecs = lastWatcherTime ? Math.floor((now.getTime() - lastWatcherTime) / 1000) : null;
 
-    for (const sym of TRADING_SYMBOLS) {
+    const activePairsSetting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+    let activeSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+    if (activePairsSetting?.value) {
+      try {
+        const parsed = JSON.parse(activePairsSetting.value);
+        activeSymbols = parsed.map((p: any) => p.symbol).filter((s: string) => SAFE_UNIVERSE.has(s));
+      } catch (e) {}
+    }
+
+    for (const sym of activeSymbols) {
       const lastTriggerSetting = await prisma.appSettings.findUnique({ where: { key: `watcher_last_trigger_${sym}` } });
       const lastLLMSetting = await prisma.appSettings.findUnique({ where: { key: `last_ai_call_${sym}` } });
 
