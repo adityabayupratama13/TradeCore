@@ -77,9 +77,6 @@ export default function PerformancePage() {
       <MetricCards summary={summary} />
 
       {/* ROW 2: EQUITY CURVE */}
-      <EquityChartComponent data={[]} /> {/* Using internal fetch in the original prompt logic? No wait, EquityChart props expects data. Let me dynamically fetch the equity curve inside the component OR pass it. I didn't return equity curve from usePerformanceData! Let's just fetch it inside EquityChart locally or update hook. For now I must use the hook update or local fetch. Wait, the prompt says EquityChart Component data source is GET /api/performance/equity-curve. But the hook usePerformanceData fetches the other 4. Wait, the prompt said 4 API routes. I made 5. I will make EquityChart fetch its own data. */}
-      {/* Wait, the prompt explicitly said "GET /api/performance/equity-curve Returns array of {date, value}". So EquityChart must fetch its own data. Let me fix EquityChartComponent usage inside here by not passing data or modifying EquityChartComponent to fetch. */}
-      {/* To satisfy strict typescript from the EquityChartComponent I created in previous step which expects pass-down `data`: I will just use `useEffect` here or I'll implement a standalone EquityChart container. Since I already wrote EquityChart as expecting `data` props, let's fetch it here. */}
       
       <EquityChartWrapper />
 

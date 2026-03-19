@@ -60,7 +60,21 @@ export function EquityChartComponent({ data }: { data: { time: string, value: nu
       lineWidth: 2,
     });
 
-    areaSeries.setData(chartData);
+    if (chartData.length === 1) {
+       // Lightweight charts requires 2 points to draw a visual area context
+       // Synthesize a duplicate point 1 day ahead so it visualizes properly without crashing
+       const d = new Date(chartData[0].time);
+       d.setDate(d.getDate() + 1);
+       const syntheticTime = d.toISOString().split('T')[0];
+
+       const synthesized = [
+          chartData[0],
+          { time: syntheticTime as any, value: chartData[0].value }
+       ];
+       areaSeries.setData(synthesized as any);
+    } else {
+       areaSeries.setData(chartData);
+    }
 
     chart.timeScale().fitContent();
 
