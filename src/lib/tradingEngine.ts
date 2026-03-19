@@ -264,7 +264,8 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     });
 
     if (signal.action === 'SKIP' || signal.confidence < 65) {
-      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Low confidence: ${signal.confidence}` });
+      const skipReason = signal.action === 'SKIP' ? `AI SKIP: ${signal.reasoning}` : `Low confidence: ${signal.confidence}`;
+      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: skipReason });
       return;
     }
 
