@@ -204,6 +204,12 @@ export default function EngineDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
            {/* LEFT: WATCHLIST TABLE */}
            <div className="col-span-2 border-r border-gray-800">
+             {hunterWatchlist.length > 0 && hunterWatchlist.length < 3 && !hunterScanning && (
+                <div className="bg-orange-500/10 border-b border-orange-500/20 p-3 text-orange-400 text-xs flex flex-col justify-center items-center text-center">
+                  <span className="font-bold flex items-center gap-1 mb-1">⚠️ Market conditions neutral</span>
+                  <span>fewer than 3 high-signal pairs found. Engine monitoring all SAFE_UNIVERSE coins. Waiting for clearer setups.</span>
+                </div>
+             )}
              <div className="p-3 border-b border-gray-800 bg-black/20 text-xs font-bold text-gray-400">
                TOP 20 WATCHLIST
              </div>
@@ -233,7 +239,7 @@ export default function EngineDashboard() {
                            <td className="px-3 py-2">
                              <div className="flex flex-col">
                                <span>{w.oiValue}</span>
-                               <span className={w.oiData?.oiChange1h > 0 ? 'text-green-400' : 'text-red-400'}>{w.oiChange1h}</span>
+                               <span className={w.oiChange1h && w.oiChange1h !== 'N/A' ? (w.oiChange1h.includes('+') ? 'text-green-400' : 'text-red-400') : 'text-gray-500'}>{w.oiChange1h}</span>
                              </div>
                            </td>
                            <td className="px-3 py-2 text-[10px] leading-tight max-w-[80px]">
@@ -285,7 +291,7 @@ export default function EngineDashboard() {
                         <div className="bg-blue-900/10 border border-blue-500/20 p-2 rounded flex flex-col gap-1.5 text-xs">
                           <div className="flex justify-between items-center">
                             <span className="text-gray-400">OI: {a.oiValue}</span>
-                            <span className={a.oiData?.oiChange1h > 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{a.oiChange1h} (1h)</span>
+                            <span className={a.oiChange1h && a.oiChange1h !== 'N/A' ? (a.oiChange1h.includes('+') ? 'text-green-400 font-bold' : 'text-red-400 font-bold') : 'text-gray-500 font-bold'}>{a.oiChange1h} {a.oiChange1h !== 'N/A' ? '(1h)' : ''}</span>
                           </div>
                           
                           <div className={`text-center font-bold py-1 flex items-center justify-center gap-1 rounded ${

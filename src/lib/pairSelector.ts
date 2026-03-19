@@ -4,6 +4,19 @@ import { fetchOIDataRaw } from './binance';
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
 const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
 
+const SAFE_UNIVERSE = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT',
+  'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT',
+  'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'LTCUSDT',
+  'UNIUSDT', 'ATOMUSDT', 'NEARUSDT', 'APTUSDT',
+  'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT',
+  'SEIUSDT', 'TIAUSDT', 'PYTHUSDT', 'WIFUSDT',
+  'PEPEUSDT', 'FLOKIUSDT', 'BONKUSDT', 'FETUSDT',
+  'RENDERUSDT', 'TAOUSDT', 'WLDUSDT', 'JUPUSDT',
+  'STRKUSDT', 'DYMUSDT', 'ALTUSDT', 'EIGENUSDT',
+  'MOVEUSDT', 'MEUSDT', 'PNUTUSDT', 'ACTUSDT',
+];
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 function chunks<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
@@ -80,26 +93,26 @@ export interface HunterResult {
   highCount: number;
 }
 
-function detectOISignal(oiData: OIData, priceChange: number, fundingRate: number): OISignal {
-  if (oiData.oiChange4h > 5 && priceChange < -1 && fundingRate < -0.0003 && oiData.topTraderLsRatio < 0.8) {
+function detectOISignal(oiData: OIData | any, priceChange: number, fundingRate: number): OISignal {
+  if (oiData.oiChange4h !== null && oiData.oiChange4h > 5 && priceChange < -1 && fundingRate < -0.0003 && oiData.topTraderLsRatio < 0.8) {
     return { type: 'SHORT_SQUEEZE_SETUP', strength: 3, direction: 'BULLISH', description: "🚨 SHORT SQUEEZE SETUP: Massive short buildup + negative funding. Liquidation cascade upward imminent." };
   }
-  if (oiData.oiChange4h > 5 && priceChange > 1 && fundingRate > 0.0003 && oiData.topTraderLsRatio > 1.5) {
+  if (oiData.oiChange4h !== null && oiData.oiChange4h > 5 && priceChange > 1 && fundingRate > 0.0003 && oiData.topTraderLsRatio > 1.5) {
     return { type: 'LONG_SQUEEZE_SETUP', strength: 3, direction: 'BEARISH', description: "🚨 LONG SQUEEZE SETUP: Overleveraged longs + positive funding. Liquidation cascade downward imminent." };
   }
-  if (oiData.oiChange4h < -8 && priceChange < -3 && oiData.takerSellRatio > 0.65) {
+  if (oiData.oiChange4h !== null && oiData.oiChange4h < -8 && priceChange < -3 && oiData.takerSellRatio > 0.65) {
     return { type: 'LONG_CAPITULATION', strength: 2, direction: 'BULLISH', description: "Potential reversal: Mass long liquidation. Exhaustion bottom possible." };
   }
-  if (oiData.oiChange4h < -5 && priceChange > 0) {
+  if (oiData.oiChange4h !== null && oiData.oiChange4h < -5 && priceChange > 0) {
     return { type: 'DISTRIBUTION', strength: 2, direction: 'BEARISH', description: "Distribution: Smart money exiting into strength. Likely reversal coming." };
   }
-  if (oiData.oiChange1h > 3 && priceChange > 1 && oiData.takerBuyRatio > 0.55) {
+  if (oiData.oiChange1h !== null && oiData.oiChange1h > 3 && priceChange > 1 && oiData.takerBuyRatio > 0.55) {
     return { type: 'TREND_CONTINUATION', strength: 2, direction: 'BULLISH', description: "Strong trend: OI + price rising together. Longs in control." };
   }
-  if (oiData.oiChange1h < -3 && priceChange > 1) {
+  if (oiData.oiChange1h !== null && oiData.oiChange1h < -3 && priceChange > 1) {
     return { type: 'SHORT_COVERING', strength: 1, direction: 'BULLISH', description: "⚠️ SHORT COVERING: Price up but OI falling. Shorts exiting, not new longs entering. Weak move." };
   }
-  if (oiData.oiChange24h > 10 && Math.abs(priceChange) < 1 && Math.abs(fundingRate) < 0.0001) {
+  if (oiData.oiChange24h !== null && oiData.oiChange24h > 10 && Math.abs(priceChange) < 1 && Math.abs(fundingRate) < 0.0001) {
     return { type: 'ACCUMULATION', strength: 1, direction: 'BULLISH', description: "Smart accumulation: OI building quietly. Big move incoming, direction unknown." };
   }
   return { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: "No clear signal" };
@@ -114,7 +127,7 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
   const currentOIValue = hlen > 0 ? parseFloat(oiHist[hlen - 1].sumOpenInterestValue) : 0;
   
   const getChange = (barsBack: number) => {
-    if (hlen <= barsBack) return 0;
+    if (hlen <= barsBack) return null; // Protect against demo missing history
     const pastOI = parseFloat(oiHist[hlen - 1 - barsBack].sumOpenInterest);
     const curOICt = parseFloat(oiHist[hlen - 1].sumOpenInterest);
     if (pastOI === 0) return 0;
@@ -126,8 +139,10 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
   const oiChange24h = getChange(24);
   
   let oiTrend: 'RISING' | 'FALLING' | 'STABLE' = 'STABLE';
-  if (oiChange4h > 2) oiTrend = 'RISING';
-  else if (oiChange4h < -2) oiTrend = 'FALLING';
+  if (oiChange4h !== null) {
+      if (oiChange4h > 2) oiTrend = 'RISING';
+      else if (oiChange4h < -2) oiTrend = 'FALLING';
+  }
 
   const llen = lsRatioAcc?.length || 0;
   const lsRatio = llen > 0 ? parseFloat(lsRatioAcc[llen - 1].longShortRatio) : 1;
@@ -144,7 +159,7 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
   const takerBuyRatio = totalTaker > 0 ? takerBuyVol / totalTaker : 0.5;
   const takerSellRatio = totalTaker > 0 ? takerSellVol / totalTaker : 0.5;
 
-  const oiData: OIData = {
+  const oiData: OIData | any = {
     symbol,
     currentOI,
     currentOIValue,
@@ -152,7 +167,7 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
     oiChange4h,
     oiChange24h,
     oiTrend,
-    oiMomentum: oiChange1h - (oiChange4h / 4),
+    oiMomentum: (oiChange1h !== null && oiChange4h !== null) ? oiChange1h - (oiChange4h / 4) : 0,
     longRatio,
     shortRatio,
     lsRatio,
@@ -198,11 +213,13 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   
   // STEP 2 - HARD FILTERS
   const validPairs = rawPairs.filter(p => {
+    if (!SAFE_UNIVERSE.includes(p.symbol)) return false;
     if (!p.symbol.endsWith('USDT')) return false;
     if (['USDC', 'BUSD', 'TUSD', 'DAI'].some(stable => p.symbol.includes(stable))) return false;
     if (INDEX_SYMBOLS.includes(p.symbol)) return false;
-    if (p.markPrice < 0.0001) return false;
-    if (p.volume24h < 30_000_000) return false;
+    if (p.markPrice < 0.01) return false;
+    if (p.volume24h < 100_000_000) return false;
+    if (Math.abs(p.fundingRate) > 0.005) return false;
     if (p.fundingRate === 0 && p.priceChange24h === 0) return false;
     return true;
   });
@@ -214,9 +231,12 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   const topValidPairs = validPairs.slice(0, 50);
 
   const oiDataMap = new Map<string, OIData>();
-  for (const batch of chunks(topValidPairs, 10)) {
+  const chunkedPairs = chunks(topValidPairs, 10);
+  for (let i = 0; i < chunkedPairs.length; i++) {
+    const batch = chunkedPairs[i];
     const results = await Promise.all(batch.map(p => fetchOIData(p.symbol, p.priceChange24h, p.fundingRate)));
     results.forEach(r => oiDataMap.set(r.symbol, r));
+    console.log(`[Dynamic Hunter] Filtered OI Data Fetch - Batch ${i + 1}/${chunkedPairs.length} Completed`);
     await sleep(100);
   }
 
@@ -251,9 +271,9 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     else squeezeRisk = 'LOW';
 
     let fundingCategory: 'EXTREME' | 'HIGH' | 'MODERATE' | 'NORMAL' = 'NORMAL';
-    if (absFR > 0.001) { fundingCategory = 'EXTREME'; score *= 2; }
-    else if (absFR > 0.0005) { fundingCategory = 'HIGH'; score *= 1.5; }
-    else if (absFR > 0.0001) { fundingCategory = 'MODERATE'; }
+    if (absFR > 0.0003) { fundingCategory = 'EXTREME'; score *= 2; }
+    else if (absFR > 0.0001) { fundingCategory = 'HIGH'; score *= 1.5; }
+    else if (absFR > 0.00005) { fundingCategory = 'MODERATE'; }
 
     const oiData = oiDataMap.get(p.symbol)!;
     const oiSignal = oiData.oiSignal;
@@ -280,8 +300,8 @@ export async function runDynamicHunter(): Promise<HunterResult> {
       tier: 'EXCLUDED',
       oiData,
       oiSignal,
-      oiValue: `$${(oiData.currentOIValue / 1e9).toFixed(2)}B`,
-      oiChange1h: `${oiData.oiChange1h > 0 ? '+' : ''}${oiData.oiChange1h.toFixed(2)}%`
+      oiValue: oiData.currentOIValue > 0 ? `$${(oiData.currentOIValue / 1e9).toFixed(2)}B` : '—',
+      oiChange1h: oiData.oiChange1h !== null ? `${oiData.oiChange1h > 0 ? '+' : ''}${oiData.oiChange1h.toFixed(2)}%` : 'N/A'
     };
   });
 
