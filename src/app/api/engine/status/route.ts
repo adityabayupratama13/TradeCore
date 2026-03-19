@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { getEngineStatus } from '../../../../../src/lib/engineScheduler';
-import { getPositions, getOpenOrders } from '../../../../../src/lib/binance';
+import { getPositions, getOpenAlgoOrders } from '../../../../../src/lib/binance';
 import { SAFE_UNIVERSE } from '../../../../../src/lib/constants';
 
 export async function GET() {
@@ -95,11 +95,19 @@ export async function GET() {
     ]);
 
     const positions = await getPositions().catch(() => []);
-    const openOrders = await getOpenOrders().catch(() => []);
-    const unprotectedPositions = positions.filter(pos => {
-       const hasSL = openOrders.some((o: any) => o.symbol === pos.symbol && (o.type === 'STOP_MARKET' || o.type === 'STOP'));
-       return !hasSL;
-    }).map(p => ({ symbol: p.symbol, direction: p.positionAmt > 0 ? 'LONG' : 'SHORT' }));
+    const unprotectedPositions: any[] = [];
+    
+    for (const pos of positions) {
+      try {
+        const algoOrders = await getOpenAlgoOrders(pos.symbol);
+        const hasSL = algoOrders.some((o: any) => o.orderType === 'STOP_MARKET' || o.type === 'STOP_MARKET');
+        if (!hasSL) {
+          unprotectedPositions.push({ symbol: pos.symbol, direction: pos.positionAmt > 0 ? 'LONG' : 'SHORT' });
+        }
+      } catch (e) {
+        unprotectedPositions.push({ symbol: pos.symbol, direction: pos.positionAmt > 0 ? 'LONG' : 'SHORT' });
+      }
+    }
 
     return NextResponse.json({
       isRunning: memoryStatus.isRunning || (dbStatus?.value === 'RUNNING'),

@@ -272,6 +272,10 @@ export async function getOpenOrders(symbol?: string) {
   return fetchBinance('/fapi/v1/openOrders', 'GET', symbol ? { symbol } : {});
 }
 
+export async function getOpenAlgoOrders(symbol?: string) {
+  return fetchBinance('/fapi/v1/algoOrder/openOrders', 'GET', symbol ? { symbol } : {});
+}
+
 export async function closePosition(symbol: string, quantity: number) {
   // Determine direction to close
   const qtyNum = parseFloat(String(quantity));
