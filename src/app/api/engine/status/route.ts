@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { getEngineStatus } from '../../../../../src/lib/engineScheduler';
 
-const TRADING_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+const TRADING_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
+  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT', 
+  'LTCUSDT', 'BCHUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 
+  'OPUSDT', 'INJUSDT', 'RNDRUSDT', 'SUIUSDT', 'PEPEUSDT'
+];
 
 export async function GET() {
   try {

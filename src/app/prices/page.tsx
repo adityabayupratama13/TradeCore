@@ -5,14 +5,20 @@ import { Activity, Clock, Database, LineChart, RefreshCw } from "lucide-react";
 import { useBinanceWebSocket } from "@/hooks/useBinanceWebSocket";
 import { useBinanceFutures } from "@/hooks/useBinanceFutures";
 
-const CRYPTO_SYMBOLS = ["btcusdt", "ethusdt", "bnbusdt", "solusdt", "xrpusdt", "dogeusdt"];
+const CRYPTO_SYMBOLS = [
+  "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", 
+  "dogeusdt", "adausdt", "avaxusdt", "dotusdt", "linkusdt", 
+  "ltcusdt", "bchusdt", "nearusdt", "aptusdt", "arbusdt", 
+  "opusdt", "injusdt", "rndrusdt", "suiusdt", "pepeusdt"
+];
 const CRYPTO_NAMES: Record<string, string> = {
-  "BTCUSDT": "Bitcoin",
-  "ETHUSDT": "Ethereum",
-  "BNBUSDT": "Binance Coin",
-  "SOLUSDT": "Solana",
-  "XRPUSDT": "Ripple",
-  "DOGEUSDT": "Dogecoin"
+  "BTCUSDT": "Bitcoin", "ETHUSDT": "Ethereum", "SOLUSDT": "Solana",
+  "BNBUSDT": "BNB", "XRPUSDT": "Ripple", "DOGEUSDT": "Dogecoin",
+  "ADAUSDT": "Cardano", "AVAXUSDT": "Avalanche", "DOTUSDT": "Polkadot",
+  "LINKUSDT": "Chainlink", "LTCUSDT": "Litecoin", "BCHUSDT": "Bitcoin Cash",
+  "NEARUSDT": "NEAR Protocol", "APTUSDT": "Aptos", "ARBUSDT": "Arbitrum",
+  "OPUSDT": "Optimism", "INJUSDT": "Injective", "RNDRUSDT": "Render",
+  "SUIUSDT": "Sui", "PEPEUSDT": "Pepe"
 };
 
 const IDX_SYMBOLS = ["BBCA", "BBRI", "TLKM", "ASII", "GOTO", "BMRI", "BRIS", "UNVR"];

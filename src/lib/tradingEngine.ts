@@ -5,7 +5,12 @@ import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
 
-const TRADING_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+const TRADING_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
+  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT', 
+  'LTCUSDT', 'BCHUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 
+  'OPUSDT', 'INJUSDT', 'RNDRUSDT', 'SUIUSDT', 'PEPEUSDT'
+];
 
 let cycleNumber = 0;
 

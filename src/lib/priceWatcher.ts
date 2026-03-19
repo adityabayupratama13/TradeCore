@@ -10,7 +10,12 @@ export interface TriggerResult {
   strength: number;
 }
 
-const TRADING_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+const TRADING_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
+  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT', 
+  'LTCUSDT', 'BCHUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 
+  'OPUSDT', 'INJUSDT', 'RNDRUSDT', 'SUIUSDT', 'PEPEUSDT'
+];
 
 export async function runPriceWatcher(): Promise<void> {
   const isEngineStr = await prisma.appSettings.findUnique({ where: { key: 'ENGINE_ENABLED' } });
