@@ -1,28 +1,45 @@
-import { getPositions, getOpenOrders, placeProtectOrder } from './binance';
+import { getPositions, placeAlgoOrder, getAlgoOrder } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 
 export async function syncPositions(): Promise<void> {
   try {
     const binancePositions = await getPositions();
-    const openOrders = await getOpenOrders();
     const dbTrades = await prisma.trade.findMany({ where: { status: 'OPEN' } });
 
     // Update active DB positions with latest markPrice and Unrealized PNL
     for (const pos of binancePositions) {
       const existing = dbTrades.find(t => t.symbol === pos.symbol && t.status === 'OPEN');
       if (existing) {
-        const hasSL = openOrders.some((o: any) => o.symbol === pos.symbol && (o.type === 'STOP_MARKET' || o.type === 'STOP'));
+        let hasSL = false;
+        if (existing.slAlgoId) {
+           try {
+              const algoStatus = await getAlgoOrder(pos.symbol, existing.slAlgoId);
+              if (algoStatus && algoStatus.algoStatus === 'WORKING') hasSL = true;
+           } catch(e) {}
+        }
+
         if (!hasSL && existing.stopLoss) {
            try {
-             await placeProtectOrder({
+             const newSl = await placeAlgoOrder({
+               algoType: 'CONDITIONAL',
                symbol: pos.symbol,
                side: pos.positionAmt > 0 ? 'SELL' : 'BUY',
-               quantity: Math.abs(pos.positionAmt),
-               stopPrice: existing.stopLoss,
-               isStopLoss: true
+               type: 'STOP_MARKET',
+               quantity: Math.abs(pos.positionAmt).toString(),
+               triggerPrice: existing.stopLoss.toString(),
+               closePosition: 'true',
+               workingType: 'MARK_PRICE',
+               priceProtect: 'FALSE',
+               timeInForce: 'GTC'
              });
-             console.log(`[PosSync] Recreated missing SL for ${pos.symbol}`);
+             
+             await prisma.trade.update({
+               where: { id: existing.id },
+               data: { slAlgoId: newSl.algoId.toString() }
+             });
+             
+             console.log(`[PosSync] Recreated missing SL Algo for ${pos.symbol}: ${newSl.algoId}`);
            } catch(e: any) {
              await sendTelegramAlert({
                type: 'RAW_MESSAGE',

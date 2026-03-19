@@ -1,4 +1,4 @@
-import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision } from './binance';
+import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice } from './binance';
 import { analyzeMarket, calculateATR } from './aiEngine';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
@@ -63,14 +63,24 @@ export async function manageOpenPositions() {
       // RULE 2: BREAKEVEN MOVE
       const beTrigger = parseFloat(process.env.BREAKEVEN_TRIGGER_PCT || '1.5');
       if (profitPct >= beTrigger && trade.stopLoss !== trade.entryPrice) {
-           await cancelAllOrders(trade.symbol);
-           await sleep(500);
            const oppositeSide = isLong ? 'SELL' : 'BUY';
-           await placeOrder({ symbol: trade.symbol, side: oppositeSide, type: 'STOP_MARKET', stopPrice: trade.entryPrice, closePosition: "true", timeInForce: "GTE_GTC", workingType: "MARK_PRICE", priceProtect: "TRUE"} as any);
-           await sleep(500);
-           await placeOrder({ symbol: trade.symbol, side: oppositeSide, type: 'TAKE_PROFIT_MARKET', stopPrice: takeProfitSafe, closePosition: "true", timeInForce: "GTE_GTC", workingType: "MARK_PRICE", priceProtect: "TRUE"} as any);
+           if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
+           await sleep(300);
+           
+           const roundedTrig = await roundPrice(trade.symbol, trade.entryPrice);
+           const newSl = await placeAlgoOrder({
+             algoType: 'CONDITIONAL',
+             symbol: trade.symbol,
+             side: oppositeSide,
+             type: 'STOP_MARKET',
+             triggerPrice: roundedTrig.toString(),
+             closePosition: 'true',
+             workingType: 'MARK_PRICE',
+             priceProtect: 'FALSE',
+             timeInForce: 'GTC'
+           });
 
-           await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: trade.entryPrice } });
+           await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
            await sendTelegramAlert({ type: 'BREAKEVEN_MOVE', data: { symbol: trade.symbol, direction: trade.direction, takeProfit: takeProfitSafe, currentPnl: profitPct.toFixed(2) } });
       }
 
@@ -78,24 +88,46 @@ export async function manageOpenPositions() {
       if (profitPct >= 3.0 && profitPct < 5.0 && trade.stopLoss !== (isLong ? trade.entryPrice * 1.01 : trade.entryPrice * 0.99)) {
            const trailPrice = isLong ? trade.entryPrice * 1.01 : trade.entryPrice * 0.99;
            if ((isLong && trailPrice > (trade.stopLoss || 0)) || (!isLong && trailPrice < (trade.stopLoss || 999999))) {
-               await cancelAllOrders(trade.symbol);
-               await sleep(500);
                const oppositeSide = isLong ? 'SELL' : 'BUY';
-               await placeOrder({ symbol: trade.symbol, side: oppositeSide, type: 'STOP_MARKET', stopPrice: trailPrice, closePosition: "true", timeInForce: "GTE_GTC", workingType: "MARK_PRICE", priceProtect: "TRUE"} as any);
-               await sleep(500);
-               await placeOrder({ symbol: trade.symbol, side: oppositeSide, type: 'TAKE_PROFIT_MARKET', stopPrice: takeProfitSafe, closePosition: "true", timeInForce: "GTE_GTC", workingType: "MARK_PRICE", priceProtect: "TRUE"} as any);
-               await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: trailPrice } });
+               if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
+               await sleep(300);
+               
+               const roundedTrig = await roundPrice(trade.symbol, trailPrice);
+               const newSl = await placeAlgoOrder({
+                 algoType: 'CONDITIONAL',
+                 symbol: trade.symbol,
+                 side: oppositeSide,
+                 type: 'STOP_MARKET',
+                 triggerPrice: roundedTrig.toString(),
+                 closePosition: 'true',
+                 workingType: 'MARK_PRICE',
+                 priceProtect: 'FALSE',
+                 timeInForce: 'GTC'
+               });
+               
+               await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
            }
       } else if (profitPct >= 5.0) {
            const trailPrice2 = isLong ? trade.entryPrice * 1.025 : trade.entryPrice * 0.975;
            if ((isLong && trailPrice2 > (trade.stopLoss || 0)) || (!isLong && trailPrice2 < (trade.stopLoss || 999999))) {
-               await cancelAllOrders(trade.symbol);
-               await sleep(500);
                const oppositeSide = isLong ? 'SELL' : 'BUY';
-               await placeOrder({ symbol: trade.symbol, side: oppositeSide, type: 'STOP_MARKET', stopPrice: trailPrice2, closePosition: "true", timeInForce: "GTE_GTC", workingType: "MARK_PRICE", priceProtect: "TRUE"} as any);
-               await sleep(500);
-               await placeOrder({ symbol: trade.symbol, side: oppositeSide, type: 'TAKE_PROFIT_MARKET', stopPrice: takeProfitSafe, closePosition: "true", timeInForce: "GTE_GTC", workingType: "MARK_PRICE", priceProtect: "TRUE"} as any);
-               await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: trailPrice2 } });
+               if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
+               await sleep(300);
+
+               const roundedTrig = await roundPrice(trade.symbol, trailPrice2);
+               const newSl = await placeAlgoOrder({
+                 algoType: 'CONDITIONAL',
+                 symbol: trade.symbol,
+                 side: oppositeSide,
+                 type: 'STOP_MARKET',
+                 triggerPrice: roundedTrig.toString(),
+                 closePosition: 'true',
+                 workingType: 'MARK_PRICE',
+                 priceProtect: 'FALSE',
+                 timeInForce: 'GTC'
+               });
+               
+               await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
            }
       }
 

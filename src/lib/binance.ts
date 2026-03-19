@@ -138,6 +138,20 @@ export interface OrderParams {
   reduceOnly?: boolean | string;
 }
 
+export interface AlgoOrderParams {
+  algoType: 'CONDITIONAL';
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  type: 'STOP_MARKET' | 'TAKE_PROFIT_MARKET' | 'STOP' | 'TAKE_PROFIT' | 'TRAILING_STOP_MARKET';
+  triggerPrice: string;
+  quantity?: string;
+  closePosition?: string;
+  workingType?: 'MARK_PRICE' | 'CONTRACT_PRICE';
+  reduceOnly?: string;
+  timeInForce?: 'GTC' | 'IOC' | 'FOK';
+  priceProtect?: string;
+}
+
 export async function getAccountInfo() {
   return fetchBinance('/fapi/v2/account');
 }
@@ -227,6 +241,18 @@ export async function cancelAllOrders(symbol: string) {
   return fetchBinance('/fapi/v1/allOpenOrders', 'DELETE', { symbol });
 }
 
+export async function placeAlgoOrder(params: AlgoOrderParams) {
+  return fetchBinance('/fapi/v1/algoOrder', 'POST', params);
+}
+
+export async function cancelAlgoOrder(symbol: string, algoId: string | number) {
+  return fetchBinance('/fapi/v1/algoOrder', 'DELETE', { symbol, algoId });
+}
+
+export async function getAlgoOrder(symbol: string, algoId: string | number) {
+  return fetchBinance('/fapi/v1/algoOrder', 'GET', { symbol, algoId });
+}
+
 export async function setLeverage(symbol: string, leverage: number) {
   return fetchBinance('/fapi/v1/leverage', 'POST', { symbol, leverage });
 }
@@ -267,45 +293,6 @@ function getOppositeSide(side: 'BUY' | 'SELL'): 'BUY' | 'SELL' {
   return side === 'BUY' ? 'SELL' : 'BUY';
 }
 
-export async function placeProtectOrder(params: any) {
-  const { symbol, side, quantity, stopPrice, isStopLoss } = params;
-  
-  // Method 1: reduceOnly (Best for demo)
-  try {
-    const res = await placeOrder({
-      symbol,
-      side,
-      type: isStopLoss ? 'STOP_MARKET' : 'TAKE_PROFIT_MARKET',
-      quantity,
-      stopPrice: stopPrice.toString(),
-      reduceOnly: "true",
-      workingType: "MARK_PRICE",
-      timeInForce: "GTC"
-    } as any);
-    console.log(`✅ ${isStopLoss ? 'SL' : 'TP'} Method 1 (reduceOnly) placed:`, res.orderId);
-    return res;
-  } catch (err: any) {
-    console.error(`❌ ${isStopLoss ? 'SL' : 'TP'} Method 1 failed:`, err.message || err);
-  }
-
-  // Method 2: closePosition (Legacy/Standard)
-  try {
-    const res = await placeOrder({
-      symbol,
-      side,
-      type: isStopLoss ? 'STOP_MARKET' : 'TAKE_PROFIT_MARKET',
-      stopPrice: stopPrice.toString(),
-      closePosition: "true",
-      workingType: "MARK_PRICE"
-    } as any);
-    console.log(`✅ ${isStopLoss ? 'SL' : 'TP'} Method 2 (closePosition) placed:`, res.orderId);
-    return res;
-  } catch (err: any) {
-    console.error(`❌ ${isStopLoss ? 'SL' : 'TP'} Method 2 failed:`, err.message || err);
-    throw new Error(`All ${isStopLoss ? 'SL' : 'TP'} placement methods failed.`);
-  }
-}
-
 export async function enterTrade(params: {
   symbol: string,
   side: 'BUY' | 'SELL',
@@ -333,32 +320,55 @@ export async function enterTrade(params: {
     type: 'MARKET',
     quantity: roundedQty
   });
+  console.log(`✅ Entry order placed: ${entryOrder.orderId}`);
 
   const oppositeSide = getOppositeSide(params.side);
 
   await sleep(500);
 
-  // STOP LOSS
-  const slOrder = await placeProtectOrder({
-    symbol: params.symbol,
-    side: oppositeSide,
-    quantity: roundedQty,
-    stopPrice: roundedSL,
-    isStopLoss: true
-  });
+  // STOP LOSS ALGO
+  let slAlgoId = null;
+  try {
+    const slOrder = await placeAlgoOrder({
+      algoType: 'CONDITIONAL',
+      symbol: params.symbol,
+      side: oppositeSide,
+      type: 'STOP_MARKET',
+      triggerPrice: roundedSL.toString(),
+      closePosition: 'true',
+      workingType: 'MARK_PRICE',
+      priceProtect: 'FALSE',
+      timeInForce: 'GTC'
+    });
+    slAlgoId = slOrder.algoId;
+    console.log(`✅ SL Algo order placed: ${slAlgoId} trigger: ${roundedSL}`);
+  } catch (err: any) {
+    console.error(`❌ SL Algo order failed:`, err.message);
+  }
 
   await sleep(500);
 
-  // TAKE PROFIT
-  const tpOrder = await placeProtectOrder({
-    symbol: params.symbol,
-    side: oppositeSide,
-    quantity: roundedQty,
-    stopPrice: roundedTP,
-    isStopLoss: false
-  });
+  // TAKE PROFIT ALGO
+  let tpAlgoId = null;
+  try {
+    const tpOrder = await placeAlgoOrder({
+      algoType: 'CONDITIONAL',
+      symbol: params.symbol,
+      side: oppositeSide,
+      type: 'TAKE_PROFIT_MARKET',
+      triggerPrice: roundedTP.toString(),
+      closePosition: 'true',
+      workingType: 'MARK_PRICE',
+      priceProtect: 'FALSE',
+      timeInForce: 'GTC'
+    });
+    tpAlgoId = tpOrder.algoId;
+    console.log(`✅ TP Algo order placed: ${tpAlgoId} trigger: ${roundedTP}`);
+  } catch (err: any) {
+    console.error(`❌ TP Algo order failed:`, err.message);
+  }
 
-  return { entryOrder, slOrder, tpOrder };
+  return { entryOrder, slAlgoId, tpAlgoId };
 }
 
 export async function fetchOIDataRaw(symbol: string) {

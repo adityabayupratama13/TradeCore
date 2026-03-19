@@ -38,6 +38,8 @@ model Trade {
   entryAt     DateTime     @default(now())
   exitAt      DateTime?
   createdAt   DateTime     @default(now())
+  slAlgoId    String?
+  tpAlgoId    String?
   journal     TradeJournal?
 }
 

@@ -107,6 +107,24 @@ export default function PositionsPage() {
                       <span className="text-gray-400">Entry / Qty</span>
                       <span className="text-white font-mono">{formatCurrency(trade.entryPrice, isCrypto)} • {trade.quantity}</span>
                     </div>
+                    {isCrypto && (
+                      <>
+                        <div className="flex justify-between text-sm mt-1">
+                          <span className="text-gray-400">SL</span>
+                          <span className="text-white font-mono flex items-center gap-1">
+                             {trade.stopLoss ? formatCurrency(trade.stopLoss, isCrypto) : 'N/A'} 
+                             {trade.slAlgoId ? <span className="text-[#00D4AA] text-xs">✅ (Algo #{trade.slAlgoId} ACTIVE)</span> : <span className="text-[#FF4757] text-xs">⚠️ (UNPROTECTED)</span>}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm mt-1 border-b border-[#1a2540] pb-2">
+                          <span className="text-gray-400">TP</span>
+                          <span className="text-white font-mono flex items-center gap-1">
+                             {trade.takeProfit ? formatCurrency(trade.takeProfit, isCrypto) : 'N/A'} 
+                             {trade.tpAlgoId ? <span className="text-[#00D4AA] text-xs">✅ (Algo #{trade.tpAlgoId} ACTIVE)</span> : <span className="text-[#FF4757] text-xs">⚠️ (UNPROTECTED)</span>}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     {isCrypto && livePrice && (
                       <div className="flex justify-between text-sm pt-2 border-t border-[#1a2540]">
                         <span className="text-gray-400">Live P&L</span>
