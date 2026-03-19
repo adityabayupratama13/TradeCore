@@ -205,6 +205,45 @@ function getOppositeSide(side: 'BUY' | 'SELL'): 'BUY' | 'SELL' {
   return side === 'BUY' ? 'SELL' : 'BUY';
 }
 
+export async function placeProtectOrder(params: any) {
+  const { symbol, side, quantity, stopPrice, isStopLoss } = params;
+  
+  // Method 1: reduceOnly (Best for demo)
+  try {
+    const res = await placeOrder({
+      symbol,
+      side,
+      type: isStopLoss ? 'STOP_MARKET' : 'TAKE_PROFIT_MARKET',
+      quantity,
+      stopPrice: stopPrice.toString(),
+      reduceOnly: "true",
+      workingType: "MARK_PRICE",
+      timeInForce: "GTC"
+    } as any);
+    console.log(`✅ ${isStopLoss ? 'SL' : 'TP'} Method 1 (reduceOnly) placed:`, res.orderId);
+    return res;
+  } catch (err: any) {
+    console.error(`❌ ${isStopLoss ? 'SL' : 'TP'} Method 1 failed:`, err.message || err);
+  }
+
+  // Method 2: closePosition (Legacy/Standard)
+  try {
+    const res = await placeOrder({
+      symbol,
+      side,
+      type: isStopLoss ? 'STOP_MARKET' : 'TAKE_PROFIT_MARKET',
+      stopPrice: stopPrice.toString(),
+      closePosition: "true",
+      workingType: "MARK_PRICE"
+    } as any);
+    console.log(`✅ ${isStopLoss ? 'SL' : 'TP'} Method 2 (closePosition) placed:`, res.orderId);
+    return res;
+  } catch (err: any) {
+    console.error(`❌ ${isStopLoss ? 'SL' : 'TP'} Method 2 failed:`, err.message || err);
+    throw new Error(`All ${isStopLoss ? 'SL' : 'TP'} placement methods failed.`);
+  }
+}
+
 export async function enterTrade(params: {
   symbol: string,
   side: 'BUY' | 'SELL',
@@ -229,30 +268,24 @@ export async function enterTrade(params: {
   await sleep(500);
 
   // STOP LOSS
-  const slOrder = await placeOrder({
+  const slOrder = await placeProtectOrder({
     symbol: params.symbol,
     side: oppositeSide,
-    type: 'STOP_MARKET',
-    stopPrice: params.stopLoss.toString(),
-    closePosition: "true",
-    timeInForce: "GTE_GTC",
-    workingType: "MARK_PRICE",
-    priceProtect: "TRUE"
-  } as any);
+    quantity: params.quantity,
+    stopPrice: params.stopLoss,
+    isStopLoss: true
+  });
 
   await sleep(500);
 
   // TAKE PROFIT
-  const tpOrder = await placeOrder({
+  const tpOrder = await placeProtectOrder({
     symbol: params.symbol,
     side: oppositeSide,
-    type: 'TAKE_PROFIT_MARKET',
-    stopPrice: params.takeProfit.toString(),
-    closePosition: "true",
-    timeInForce: "GTE_GTC",
-    workingType: "MARK_PRICE",
-    priceProtect: "TRUE"
-  } as any);
+    quantity: params.quantity,
+    stopPrice: params.takeProfit,
+    isStopLoss: false
+  });
 
   return { entryOrder, slOrder, tpOrder };
 }

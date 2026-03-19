@@ -1,6 +1,46 @@
 import { getKlines, getMarkPrice, get24hrTicker, getOrderBook, Kline } from './binance';
 import { prisma } from '../../lib/prisma';
 
+function enforceMinRR(signal: any): any {
+  if (signal.action === 'SKIP') return signal;
+  
+  const entry = signal.entryPrice;
+  const sl = signal.stopLoss;
+  let tp = signal.takeProfit;
+  
+  if (!entry || !sl || !tp) return signal;
+  
+  const slDistance = Math.abs(entry - sl);
+  const tpDistance = Math.abs(entry - tp);
+  const currentRR = tpDistance / slDistance;
+  
+  if (currentRR < 2.0) {
+    console.log(`⚠️ AI R/R too low: ${currentRR.toFixed(2)}. Recalculating TP...`);
+    const minTpDistance = slDistance * 2.5; 
+    
+    if (signal.action === 'LONG') {
+      tp = entry + minTpDistance;
+    } else if (signal.action === 'SHORT') {
+      tp = entry - minTpDistance;
+    }
+    
+    signal.takeProfit = tp;
+    signal.riskReward = 2.5;
+    console.log(`✅ TP adjusted to: ${signal.takeProfit} (R/R 1:2.5)`);
+  }
+  
+  const finalTpDistance = Math.abs(entry - signal.takeProfit);
+  const finalRR = finalTpDistance / slDistance;
+  
+  if (finalRR < 1.5) {
+    console.log(`❌ R/R still too low after adjustment: ${finalRR}. Skipping trade.`);
+    signal.action = 'SKIP';
+    signal.reasoning = `R/R ${finalRR.toFixed(2)} below minimum 1.5`;
+  }
+  
+  return signal;
+}
+
 export interface TradeSignal {
   symbol: string;
   action: 'LONG' | 'SHORT' | 'SKIP';
@@ -417,6 +457,17 @@ ENTRY RULES:
 IMPORTANT: PREFER_SHORT + BEARISH_1H = HIGH CONVICTION SHORT opportunity. Do NOT skip this setup. This is exactly the contrarian squeeze signal we are hunting.
 IMPORTANT: PREFER_LONG + BULLISH_1H = HIGH CONVICTION LONG opportunity. Do NOT skip this setup.
 
+CRITICAL R/R RULE:
+Take profit MUST be minimum 2x the stop loss distance.
+Calculate example:
+  SHORT entry 69745, SL 69980:
+  SL distance = 69980 - 69745 = 235 points
+  TP must be AT LEAST 235 × 2 = 470 points below entry
+  TP = 69745 - 470 = 69275 (MINIMUM)
+  TP = 69745 - 587 = 69158 (better, 1:2.5)
+
+NEVER set TP at 1:1 ratio — always minimum 1:2
+
 JSON only, no markdown:
 {"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}
 `;
@@ -450,8 +501,7 @@ JSON only, no markdown:
       content = content.replace(/^```json\n?/, '').replace(/\n?```$/, '');
     }
     const signalObj = JSON.parse(content);
-
-    return {
+    let finalSignalObj = {
       symbol,
       action: signalObj.action,
       confidence: signalObj.confidence,
@@ -465,6 +515,9 @@ JSON only, no markdown:
       estimatedDuration: signalObj.estimated_duration,
       analyzedAt: new Date()
     };
+
+    finalSignalObj = enforceMinRR(finalSignalObj);
+    return finalSignalObj;
   } catch (error) {
     console.error(`AI Analysis Failed for ${symbol}`, error);
     return {

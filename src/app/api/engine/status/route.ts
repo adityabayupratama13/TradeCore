@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { getEngineStatus } from '../../../../../src/lib/engineScheduler';
+import { getPositions, getOpenOrders } from '../../../../../src/lib/binance';
 
 const TRADING_SYMBOLS = [
   'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
@@ -90,6 +91,13 @@ export async function GET() {
       prisma.tradeSignalHistory.findMany({ orderBy: { createdAt: 'desc' }, take: 20 })
     ]);
 
+    const positions = await getPositions().catch(() => []);
+    const openOrders = await getOpenOrders().catch(() => []);
+    const unprotectedPositions = positions.filter(pos => {
+       const hasSL = openOrders.some((o: any) => o.symbol === pos.symbol && (o.type === 'STOP_MARKET' || o.type === 'STOP'));
+       return !hasSL;
+    }).map(p => ({ symbol: p.symbol, direction: p.positionAmt > 0 ? 'LONG' : 'SHORT' }));
+
     return NextResponse.json({
       isRunning: memoryStatus.isRunning || (dbStatus?.value === 'RUNNING'),
       lastRun: lastRunRaw?.value || null,
@@ -99,7 +107,8 @@ export async function GET() {
       performanceStats: { wins, losses, netPnl, bestTrade, total: todayTrades.length, partials: pts, breakevens: bks },
       watcherStatus,
       signalHistory,
-      recentLogs
+      recentLogs,
+      unprotectedPositions
     });
 
   } catch (err: any) {

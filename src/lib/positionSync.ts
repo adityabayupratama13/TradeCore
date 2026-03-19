@@ -1,16 +1,36 @@
-import { getPositions } from './binance';
+import { getPositions, getOpenOrders, placeProtectOrder } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 
 export async function syncPositions(): Promise<void> {
   try {
     const binancePositions = await getPositions();
+    const openOrders = await getOpenOrders();
     const dbTrades = await prisma.trade.findMany({ where: { status: 'OPEN' } });
 
     // Update active DB positions with latest markPrice and Unrealized PNL
     for (const pos of binancePositions) {
       const existing = dbTrades.find(t => t.symbol === pos.symbol && t.status === 'OPEN');
       if (existing) {
+        const hasSL = openOrders.some((o: any) => o.symbol === pos.symbol && (o.type === 'STOP_MARKET' || o.type === 'STOP'));
+        if (!hasSL && existing.stopLoss) {
+           try {
+             await placeProtectOrder({
+               symbol: pos.symbol,
+               side: pos.positionAmt > 0 ? 'SELL' : 'BUY',
+               quantity: Math.abs(pos.positionAmt),
+               stopPrice: existing.stopLoss,
+               isStopLoss: true
+             });
+             console.log(`[PosSync] Recreated missing SL for ${pos.symbol}`);
+           } catch(e: any) {
+             await sendTelegramAlert({
+               type: 'RAW_MESSAGE',
+               data: { text: `🚨 URGENT: ${pos.symbol} has no Stop Loss!\nManual action required immediately.\nCurrent P&L: ${pos.unrealizedProfit}` } as any
+             });
+           }
+        }
+
         const pnlPct = ((pos.markPrice - pos.entryPrice) / pos.entryPrice) * 100 * (pos.positionAmt > 0 ? 1 : -1) * pos.leverage;
         await prisma.trade.update({
           where: { id: existing.id },

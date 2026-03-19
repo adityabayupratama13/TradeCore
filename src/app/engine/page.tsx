@@ -160,6 +160,27 @@ export default function EngineDashboard() {
         </div>
       </div>
 
+      {/* UNPROTECTED POSITIONS BANNER */}
+      {status?.unprotectedPositions?.length > 0 && (
+        <div className="bg-red-500/20 border-l-4 border-red-500 p-4 rounded-r-lg mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex gap-3">
+            <AlertCircle className="text-red-500 w-6 h-6 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-red-500 font-bold text-lg">🚨 UNPROTECTED POSITION DETECTED</h3>
+              <p className="text-red-400 text-sm mt-1 mb-0">
+                {status.unprotectedPositions.map((p: any) => `${p.symbol} ${p.direction}`).join(', ')} has no Stop Loss order!
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => handleAction('close-all')} // Assuming close-all closes positions
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded shadow-lg transition-colors shrink-0"
+          >
+            [CLOSE NOW]
+          </button>
+        </div>
+      )}
+
       {/* METRICS ROW */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-[#1A1A1A] border border-gray-800 rounded-xl p-5">
