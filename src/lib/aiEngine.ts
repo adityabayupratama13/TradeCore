@@ -290,11 +290,47 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
   if (currentHourWIB >= 0 && currentHourWIB < 8) tradingSession = "ASIAN";
   else if (currentHourWIB >= 8 && currentHourWIB < 15) tradingSession = "LONDON";
 
+  const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+  let hunterContext = '';
+  if (setting?.value) {
+    const activePairs = JSON.parse(setting.value);
+    const pair = activePairs.find((p: any) => p.symbol === symbol);
+    if (pair) {
+      const { fundingRate, fundingCategory, direction, biasSide, squeezeRisk, volume24h, priceChange24h } = pair;
+      hunterContext = `MARKET DYNAMICS:
+Funding Rate: ${fundingRate > 0 ? '+' : ''}${(fundingRate * 100).toFixed(4)}%
+Category: ${fundingCategory}
+Crowd Position: ${direction}
+Contrarian Signal: ${biasSide}
+Squeeze Risk: ${squeezeRisk}
+24h Volume: $${(volume24h / 1_000_000).toFixed(0)}M
+24h Price Change: ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%
+
+SQUEEZE ANALYSIS:
+${fundingCategory === 'EXTREME' ? 
+  `⚡ EXTREME FUNDING DETECTED (${(fundingRate*100).toFixed(4)}%)
+   ${direction === 'LONG_HEAVY' ? 
+     'Market is severely overcrowded LONG. Forced liquidations likely on any drop. Strong SHORT bias.' : 
+     'Market is severely overcrowded SHORT. Short squeeze imminent on any pump. Strong LONG bias.'}
+   This is a HIGH CONVICTION contrarian setup.` 
+  : `Funding elevated. Mild contrarian pressure toward ${biasSide}.`
+}
+
+ENTRY RULES FOR THIS PAIR:
+- Primary bias: ${biasSide}
+- Override bias ONLY if technicals strongly disagree (ADX > 30 opposite direction)
+- ${squeezeRisk === 'HIGH' ? 
+    'CAUTION: Lower volume pair. Use tighter SL (0.8x ATR). Reduce position size 50%.' : 
+    'Normal position sizing allowed.'}`;
+    }
+  }
+
   const prompt = `Crypto futures day trader. Analyze ${symbol} for intraday trade.
 Goal: catch moves completing within 2-8 hours.
 ${triggerContext}
 PRICE: ${markPriceObj.markPrice} | 24h: ${ticker.priceChangePercent}% | Vol: ${vol_15m.ratio.toFixed(2)}x avg
-FUNDING: ${markPriceObj.fundingRate.toFixed(4)}%
+
+${hunterContext}
 
 INDICATORS:
 15m: EMA20=${ema20_15m} EMA50=${ema50_15m} RSI=${rsi_15m}
@@ -316,7 +352,6 @@ DAY TRADING RULES:
 - Max hold: 8 hours
 - Leverage: 2x default, 3x only if ADX_1h > 30
 - SKIP if RSI_15m > 72 or < 28
-- SKIP if funding rate |fundingRate| > 0.05%
 - SKIP if Friday after 20:00 WIB (weekend risk)
 
 JSON only, no markdown:

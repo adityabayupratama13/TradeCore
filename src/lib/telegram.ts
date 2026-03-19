@@ -3,7 +3,7 @@ import { getPositions, closePosition } from './binance';
 import { startEngine, stopEngine, getEngineStatus } from './engineScheduler';
 
 interface TelegramMessage {
-  type: 'LOCK' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE';
+  type: 'LOCK' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED';
   data: Record<string, any>;
 }
 
@@ -66,6 +66,10 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
         break;
       case 'DAILY_SUMMARY':
         text = `📊 DAILY SUMMARY — ${d.dateWIB || d.date}\n━━━━━━━━━━━━━━\nTrades: ${d.totalTrades || d.total} (${d.wins}W / ${d.losses}L)\nWin Rate: ${d.winRate}%\nNet P&L: ${d.netPnl >= 0 ? '+' : ''}${d.netPnl} IDR (${d.netPct || d.pnlPct}%)\nBest: +${d.bestTrade} IDR | Worst: ${d.worstTrade} IDR\nDrawdown: ${d.drawdown}%\n━━━━━━━━━━━━━━\nStatus: ${d.statusEmoji} ${d.status}\nCapital: Rp ${d.totalCapital || d.capital}`;
+        break;
+      case 'PAIRS_UPDATED':
+        text = `🦅 DYNAMIC HUNTER — HOURLY UPDATE\n━━━━━━━━━━━━━━━━━━━\nScanned: ${d.totalScanned} pairs\nPassed filters: ${d.totalPassed} pairs\n━━━━━━━━━━━━━━━━━━━\n⚡ ACTIVE TRADING PAIRS:\n${d.activePairs.map((p: any, i: number) => 
+`${i+1}. ${p.symbol}\n   Funding: ${p.fundingRate > 0 ? '+' : ''}${(p.fundingRate*100).toFixed(4)}%\n   ${p.fundingCategory === 'EXTREME' ? '🔥 EXTREME' : '⚠️ HIGH'} — ${p.direction}\n   Bias: ${p.biasSide === 'PREFER_SHORT' ? '↘️ SHORT' : '↗️ LONG'}\n   Vol: $${(p.volume24h/1e9).toFixed(2)}B`).join('\n')}\n━━━━━━━━━━━━━━━━━━━\nNext scan: in 1 hour`;
         break;
       case 'RAW_MESSAGE':
         text = d.text;

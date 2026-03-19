@@ -10,12 +10,18 @@ export interface TriggerResult {
   strength: number;
 }
 
-const TRADING_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 
-  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT', 
-  'LTCUSDT', 'BCHUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 
-  'OPUSDT', 'INJUSDT', 'RNDRUSDT', 'SUIUSDT', 'PEPEUSDT'
-];
+async function getActivePairs() {
+  const setting = await prisma.appSettings.findUnique({
+    where: { key: 'active_trading_pairs' }
+  });
+  if (!setting?.value) return [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
+  
+  try {
+    return JSON.parse(setting.value);
+  } catch (e) {
+    return [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
+  }
+}
 
 export async function runPriceWatcher(): Promise<void> {
   const isEngineStr = await prisma.appSettings.findUnique({ where: { key: 'ENGINE_ENABLED' } });
@@ -38,7 +44,10 @@ export async function runPriceWatcher(): Promise<void> {
     create: { key: 'watcher_last_run', value: new Date().toISOString() }
   });
 
-  for (const symbol of TRADING_SYMBOLS) {
+  const activePairs = await getActivePairs();
+
+  for (const pair of activePairs) {
+    const symbol = pair.symbol;
     try {
       const [klines15m, markPriceObj] = await Promise.all([
         getKlines(symbol, '15m', 50),

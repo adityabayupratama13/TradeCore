@@ -7,6 +7,10 @@ export default function EngineDashboard() {
   const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  
+  const [hunterWatchlist, setHunterWatchlist] = useState<any[]>([]);
+  const [hunterActive, setHunterActive] = useState<any[]>([]);
+  const [hunterScanning, setHunterScanning] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -20,11 +24,44 @@ export default function EngineDashboard() {
     }
   };
 
+  const fetchHunter = async () => {
+    try {
+      const [wlRes, apRes] = await Promise.all([
+        fetch('/api/engine/watchlist'),
+        fetch('/api/engine/active-pairs')
+      ]);
+      const wlData = await wlRes.json();
+      const apData = await apRes.json();
+      if (wlData.success) setHunterWatchlist(wlData.watchlist);
+      if (apData.success) setHunterActive(apData.activePairs);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
+    fetchHunter();
+    const interval = setInterval(() => {
+      fetchStatus();
+      fetchHunter();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleScanNow = async () => {
+    setHunterScanning(true);
+    try {
+      const res = await fetch('/api/engine/scan-pairs', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setHunterWatchlist(data.watchlist);
+        setHunterActive(data.activePairs);
+      }
+    } finally {
+      setHunterScanning(false);
+    }
+  };
 
   const handleAction = async (endpoint: string) => {
     setActionLoading(true);
@@ -141,6 +178,106 @@ export default function EngineDashboard() {
             <Clock className="w-5 h-5 text-gray-500" />
             {status.lastRun ? formatDistanceToNow(new Date(status.lastRun), { addSuffix: true }) : 'Never'}
           </div>
+        </div>
+      </div>
+
+      {/* 🦅 DYNAMIC HUNTER SECTION */}
+      <div className="bg-[#1A1A1A] border border-gray-800 rounded-xl flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#151515]">
+          <div>
+            <h2 className="font-bold flex items-center gap-2 text-blue-400">
+              🦅 Dynamic Hunter
+            </h2>
+            <div className="text-xs text-gray-500 mt-1 flex gap-4">
+              <span>Scanning 250+ USDT Pairs Hourly</span>
+            </div>
+          </div>
+          <button 
+            onClick={handleScanNow}
+            disabled={hunterScanning}
+            className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded text-sm hover:bg-blue-500/20 disabled:opacity-50"
+          >
+             <RefreshCcw className={`w-3.5 h-3.5 ${hunterScanning ? 'animate-spin' : ''}`} /> {hunterScanning ? 'Scanning...' : 'SCAN NOW'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
+           {/* LEFT: WATCHLIST TABLE */}
+           <div className="col-span-2 border-r border-gray-800">
+             <div className="p-3 border-b border-gray-800 bg-black/20 text-xs font-bold text-gray-400">
+               TOP 20 WATCHLIST
+             </div>
+             <div className="max-h-[450px] overflow-y-auto custom-scrollbar">
+               <table className="w-full text-xs text-left">
+                 <thead className="text-gray-500 uppercase bg-black/40 sticky top-0">
+                   <tr>
+                     <th className="px-3 py-2">Sym</th>
+                     <th className="px-3 py-2">Funding</th>
+                     <th className="px-3 py-2">Cat</th>
+                     <th className="px-3 py-2">Dir</th>
+                     <th className="px-3 py-2">Vol</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                    {hunterWatchlist.length === 0 ? (
+                      <tr><td colSpan={5} className="p-4 text-center text-gray-500">Not scanned yet</td></tr>
+                    ) : (
+                      hunterWatchlist.map((w: any, idx: number) => (
+                        <tr key={w.symbol} className={`border-b border-gray-800/20 ${w.fundingCategory === 'EXTREME' ? 'bg-red-500/5 hover:bg-red-500/10' : w.fundingCategory === 'HIGH' ? 'bg-orange-500/5 hover:bg-orange-500/10' : 'hover:bg-white/5'}`}>
+                           <td className="px-3 py-2 font-mono font-bold flex items-center gap-1">
+                             {w.tier === 'ACTIVE' && <Zap className="w-3 h-3 text-[#00D4AA]" />} {w.symbol}
+                           </td>
+                           <td className={`px-3 py-2 ${w.fundingRate > 0 ? 'text-green-400' : 'text-red-400'}`}>{(w.fundingRate*100).toFixed(4)}%</td>
+                           <td className="px-3 py-2">{w.fundingCategory}</td>
+                           <td className="px-3 py-2">{w.direction === 'LONG_HEAVY' ? '🔴 LONG_HVY' : w.direction === 'SHORT_HEAVY' ? '🟢 SHRT_HVY' : 'NEUTRAL'}</td>
+                           <td className="px-3 py-2">${(w.volume24h/1e6).toFixed(0)}M</td>
+                        </tr>
+                      ))
+                    )}
+                 </tbody>
+               </table>
+             </div>
+           </div>
+
+           {/* RIGHT: TOP 5 ACTIVE CARDS */}
+           <div className="col-span-1 bg-black/10">
+             <div className="p-3 border-b border-gray-800 bg-black/20 text-xs font-bold text-[#00D4AA]">
+               ⚡ ACTIVE TRADING PAIRS (TOP 5)
+             </div>
+             <div className="p-3 space-y-3 max-h-[450px] overflow-y-auto custom-scrollbar">
+                {hunterActive.length === 0 ? (
+                  <div className="text-center text-gray-500 mt-10">No active pairs</div>
+                ) : (
+                  hunterActive.map((a: any) => (
+                     <div key={a.symbol} className="bg-[#151515] border border-gray-800 rounded p-3">
+                        <div className="flex justify-between items-center mb-2">
+                           <span className="font-bold text-lg">{a.symbol}</span>
+                           <span className={`text-sm font-mono ${a.fundingRate > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                             {(a.fundingRate*100).toFixed(4)}%
+                           </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs mb-2">
+                           <span className="bg-gray-800/50 px-2 py-0.5 rounded text-gray-300">
+                             {a.fundingCategory === 'EXTREME' ? '🔥 EXTREME' : a.fundingCategory === 'HIGH' ? '⚠️ HIGH' : 'NORMAL'}
+                           </span>
+                           <span className={`px-2 py-0.5 rounded border ${a.squeezeRisk === 'HIGH' ? 'border-red-500/30 text-red-400' : a.squeezeRisk === 'LOW' ? 'border-green-500/30 text-green-400' : 'border-orange-500/30 text-orange-400'}`}>
+                             Risk: {a.squeezeRisk}
+                           </span>
+                        </div>
+                        <div className="bg-black/40 border border-gray-800/50 p-2 rounded text-xs flex justify-between">
+                           <span className="text-gray-400">Bias:</span>
+                           <span className={a.biasSide === 'PREFER_SHORT' ? 'text-red-400 font-bold' : a.biasSide === 'PREFER_LONG' ? 'text-green-400 font-bold' : 'text-gray-300'}>
+                             {a.biasSide}
+                           </span>
+                        </div>
+                     </div>
+                  ))
+                )}
+             </div>
+           </div>
+        </div>
+        <div className="bg-[#111] p-3 text-center text-xs text-gray-500 border-t border-gray-800">
+          Pairs auto-rotate every 1 hour based on real-time market liquidations and crowd positioning.
         </div>
       </div>
 

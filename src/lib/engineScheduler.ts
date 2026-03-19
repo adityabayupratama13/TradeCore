@@ -3,10 +3,12 @@ import { manageOpenPositions } from './tradingEngine';
 import { runPriceWatcher } from './priceWatcher';
 import { prisma } from '../../lib/prisma';
 import { startTelegramListener, sendTelegramAlert } from './telegram';
+import { runDynamicHunter } from './pairSelector';
 
 let priceWatcherTimer: NodeJS.Timeout | null = null;
 let positionManagerTimer: NodeJS.Timeout | null = null;
 let healthTimer: NodeJS.Timeout | null = null;
+let hunterTimer: NodeJS.Timeout | null = null;
 let isRunning = false;
 
 export function startEngine(): void {
@@ -15,10 +17,12 @@ export function startEngine(): void {
   
   startPriceWatcherLoop();
   startPositionManagerLoop();
+  startDynamicHunterLoop();
   
   console.log('🤖 TradeCore Engine STARTED');
   console.log('👁️  Price Watcher: every 60 seconds');
   console.log('📊 Position Manager: every 5 minutes');
+  console.log('🦅 Dynamic Hunter: every 1 hour');
 }
 
 function startPriceWatcherLoop(): void {
@@ -55,8 +59,26 @@ function startPositionManagerLoop(): void {
 export function stopEngine(): void {
   if (priceWatcherTimer) clearTimeout(priceWatcherTimer);
   if (positionManagerTimer) clearTimeout(positionManagerTimer);
+  if (hunterTimer) clearTimeout(hunterTimer);
   isRunning = false;
   console.log('🛑 TradeCore Engine STOPPED');
+}
+
+function startDynamicHunterLoop(): void {
+  const run = async () => {
+    try {
+      console.log('🦅 Dynamic Hunter scanning 250+ pairs...')
+      const result = await runDynamicHunter()
+      console.log(`✅ Hunter: ${result.totalPassed} pairs passed filters`)
+      console.log(`📡 Active: ${result.activePairs.map(p => p.symbol).join(', ')}`)
+      await sendTelegramAlert({ type: 'PAIRS_UPDATED', data: result } as any)
+    } catch(err) {
+      console.error('DynamicHunter error:', err)
+    } finally {
+      if (isRunning) hunterTimer = setTimeout(run, 60 * 60 * 1000) // 1 hour
+    }
+  }
+  run() // run immediately on engine start
 }
 
 export function getEngineStatus() {

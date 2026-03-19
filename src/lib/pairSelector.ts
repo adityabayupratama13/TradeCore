@@ -1,0 +1,208 @@
+import { prisma } from '../../lib/prisma';
+
+const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
+const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
+
+export interface PairData {
+  symbol: string;
+  fundingRate: number;       
+  markPrice: number;
+  volume24h: number;         
+  priceChange24h: number;    
+  highPrice24h: number;
+  lowPrice24h: number;
+}
+
+export interface ScoredPair extends PairData {
+  absFundingRate: number;
+  fundingCategory: 'EXTREME' | 'HIGH' | 'MODERATE' | 'NORMAL';
+  direction: 'LONG_HEAVY' | 'SHORT_HEAVY' | 'NEUTRAL';
+  biasSide: 'PREFER_SHORT' | 'PREFER_LONG' | 'NEUTRAL';
+  squeezeRisk: 'HIGH' | 'MEDIUM' | 'LOW';
+  score: number;
+  tier: 'WATCHLIST' | 'ACTIVE' | 'EXCLUDED';
+}
+
+export interface HunterResult {
+  watchlist: ScoredPair[];
+  activePairs: ScoredPair[];
+  scannedAt: Date;
+  totalScanned: number;
+  totalPassed: number;
+  extremeCount: number;
+  highCount: number;
+}
+
+export async function runDynamicHunter(): Promise<HunterResult> {
+  const [fundingRes, tickerRes] = await Promise.all([
+    fetch(`${BINANCE_BASE_URL}/fapi/v1/premiumIndex`),
+    fetch(`${BINANCE_BASE_URL}/fapi/v1/ticker/24hr`)
+  ]);
+
+  const allFundingRates = await fundingRes.json();
+  const allTickers = await tickerRes.json();
+
+  const fundingMap: Record<string, any> = {};
+  allFundingRates.forEach((f: any) => { fundingMap[f.symbol] = f; });
+
+  const rawPairs: PairData[] = [];
+  allTickers.forEach((t: any) => {
+    const f = fundingMap[t.symbol];
+    if (f) {
+      rawPairs.push({
+        symbol: t.symbol,
+        fundingRate: parseFloat(f.lastFundingRate),
+        markPrice: parseFloat(f.markPrice),
+        volume24h: parseFloat(t.quoteVolume),
+        priceChange24h: parseFloat(t.priceChangePercent),
+        highPrice24h: parseFloat(t.highPrice),
+        lowPrice24h: parseFloat(t.lowPrice)
+      });
+    }
+  });
+
+  const totalScanned = rawPairs.length;
+  
+  // STEP 2 - HARD FILTERS
+  const validPairs = rawPairs.filter(p => {
+    if (!p.symbol.endsWith('USDT')) return false;
+    if (['USDC', 'BUSD', 'TUSD', 'DAI'].some(stable => p.symbol.includes(stable))) return false;
+    if (INDEX_SYMBOLS.includes(p.symbol)) return false;
+    if (p.markPrice < 0.0001) return false;
+    if (p.volume24h < 30_000_000) return false;
+    if (p.fundingRate === 0 && p.priceChange24h === 0) return false;
+    return true;
+  });
+
+  const totalPassed = validPairs.length;
+
+  // STEP 3 - SCORE EVERY PAIR
+  const scoredPairs: ScoredPair[] = validPairs.map(p => {
+    const absFR = Math.abs(p.fundingRate);
+    let score = absFR * 100000;
+
+    if (p.volume24h > 1_000_000_000) score *= 2.0;
+    else if (p.volume24h > 500_000_000) score *= 1.5;
+    else if (p.volume24h > 100_000_000) score *= 1.2;
+    else score *= 1.0;
+
+    let direction: 'LONG_HEAVY' | 'SHORT_HEAVY' | 'NEUTRAL' = 'NEUTRAL';
+    let biasSide: 'PREFER_SHORT' | 'PREFER_LONG' | 'NEUTRAL' = 'NEUTRAL';
+    if (p.fundingRate > 0) {
+      direction = 'LONG_HEAVY';
+      biasSide = 'PREFER_SHORT';
+    } else if (p.fundingRate < 0) {
+      direction = 'SHORT_HEAVY';
+      biasSide = 'PREFER_LONG';
+    }
+
+    const isBullMomentum = p.priceChange24h > 2;
+    const isBearMomentum = p.priceChange24h < -2;
+    if (direction === 'SHORT_HEAVY' && isBullMomentum) score *= 1.3;
+    if (direction === 'LONG_HEAVY' && isBearMomentum) score *= 1.3;
+
+    let squeezeRisk: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+    if (p.volume24h < 50_000_000) squeezeRisk = 'HIGH';
+    else if (p.volume24h < 200_000_000) squeezeRisk = 'MEDIUM';
+    else squeezeRisk = 'LOW';
+
+    let fundingCategory: 'EXTREME' | 'HIGH' | 'MODERATE' | 'NORMAL' = 'NORMAL';
+    if (absFR > 0.001) { fundingCategory = 'EXTREME'; score *= 2; }
+    else if (absFR > 0.0005) { fundingCategory = 'HIGH'; score *= 1.5; }
+    else if (absFR > 0.0001) { fundingCategory = 'MODERATE'; }
+
+    return {
+      ...p,
+      absFundingRate: absFR,
+      fundingCategory,
+      direction,
+      biasSide,
+      squeezeRisk,
+      score,
+      tier: 'EXCLUDED'
+    };
+  });
+
+  // STEP 4 - BUILD WATCHLIST
+  scoredPairs.sort((a, b) => b.score - a.score);
+  const watchlist = scoredPairs.slice(0, 20).map(p => ({ ...p, tier: 'WATCHLIST' as const }));
+
+  await prisma.appSettings.upsert({
+    where: { key: 'hunter_watchlist' },
+    update: { value: JSON.stringify(watchlist) },
+    create: { key: 'hunter_watchlist', value: JSON.stringify(watchlist) }
+  });
+
+  let extremeCount = 0;
+  let highCount = 0;
+  watchlist.forEach(p => {
+    if (p.fundingCategory === 'EXTREME') extremeCount++;
+    if (p.fundingCategory === 'HIGH') highCount++;
+  });
+
+  // STEP 5 - SELECT ACTIVE TRADING PAIRS
+  let eligibleActive = watchlist.filter(p => 
+    (p.squeezeRisk === 'LOW' || p.squeezeRisk === 'MEDIUM') &&
+    p.volume24h > 50_000_000 &&
+    (p.fundingCategory === 'EXTREME' || p.fundingCategory === 'HIGH')
+  );
+
+  const finalActive: ScoredPair[] = [];
+  let shortHeavyCount = 0;
+  let longHeavyCount = 0;
+
+  for (const p of eligibleActive) {
+    if (finalActive.length >= 5) break;
+    
+    if (p.biasSide === 'PREFER_SHORT' && shortHeavyCount >= 2) continue;
+    if (p.biasSide === 'PREFER_LONG' && longHeavyCount >= 2) continue;
+    
+    if (p.biasSide === 'PREFER_SHORT') shortHeavyCount++;
+    if (p.biasSide === 'PREFER_LONG') longHeavyCount++;
+    
+    finalActive.push({ ...p, tier: 'ACTIVE' });
+  }
+
+  // Always add BTCUSDT
+  let hasBTC = finalActive.find(p => p.symbol === 'BTCUSDT');
+  if (!hasBTC) {
+    const btcRaw = scoredPairs.find(p => p.symbol === 'BTCUSDT');
+    if (btcRaw) {
+      if (finalActive.length === 5) {
+        finalActive.pop(); // Remove lowest scored to make room
+      }
+      finalActive.unshift({ ...btcRaw, tier: 'ACTIVE' }); // Add to front
+    }
+  }
+
+  // Double check length limits and default fallbacks if empty
+  if (finalActive.length === 0) {
+    const defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+    for (const sym of defaultSymbols) {
+      const p = scoredPairs.find(x => x.symbol === sym);
+      if (p) finalActive.push({ ...p, tier: 'ACTIVE' });
+    }
+  }
+
+  await prisma.appSettings.upsert({
+    where: { key: 'active_trading_pairs' },
+    update: { value: JSON.stringify(finalActive) },
+    create: { key: 'active_trading_pairs', value: JSON.stringify(finalActive) }
+  });
+
+  // Sync Watchlist Tier labels manually to return full state to UI correctly
+  const returnWatchlist = watchlist.map(w => {
+    if (finalActive.find(a => a.symbol === w.symbol)) return { ...w, tier: 'ACTIVE' as const };
+    return w;
+  });
+
+  return {
+    watchlist: returnWatchlist,
+    activePairs: finalActive,
+    scannedAt: new Date(),
+    totalScanned,
+    totalPassed,
+    extremeCount,
+    highCount
+  };
+}
