@@ -7,10 +7,23 @@ export async function POST() {
         return NextResponse.json({ success: false, error: 'ENGINE_TEST_MODE is not true in .env.local' }, { status: 400 });
     }
     
-    // Fire test trade on BTCUSDT bypassing everything else
-    executeAIAndTrade('BTCUSDT', { triggerType: 'TEST_TRADE', strength: 3 }).catch(e => console.error(e));
+    const result = await executeAIAndTrade('BTCUSDT', { triggerType: 'TEST_TRADE', strength: 3 });
     
-    return NextResponse.json({ success: true, message: 'Test trade dispatched to engine.' });
+    if (result?.success) {
+      return NextResponse.json({ 
+        success: true, 
+        orderId: result.order?.orderId || 'MOCKED_ID',
+        symbol: 'BTCUSDT',
+        side: result.signal.action === 'LONG' ? 'BUY' : 'SELL',
+        price: result.signal.entryPrice,
+        message: `Order ${result.order?.orderId || 'MOCKED'} placed successfully`
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        error: result?.reason || 'Unknown error inside execution block'
+      }, { status: 400 });
+    }
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

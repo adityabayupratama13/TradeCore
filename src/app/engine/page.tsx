@@ -69,8 +69,11 @@ export default function EngineDashboard() {
       if (endpoint === 'test-trade') {
          const res = await fetch(`/api/engine/test-trade`, { method: 'POST' });
          const data = await res.json();
-         if (!res.ok) throw new Error(data.error || 'Test trade failed');
-         alert('✅ Test trade injected. Check Active Positions soon.');
+         if (!res.ok || !data.success) {
+            alert(`❌ Error: ${data.error || 'Test trade failed'}`);
+         } else {
+            alert(`✅ Order #${data.orderId} — ${data.side} ${data.symbol} @ $${data.price}\nCheck Binance Demo → Positions tab`);
+         }
       } else {
          await fetch(`/api/engine/${endpoint}`, { method: 'POST' });
          await fetchStatus();

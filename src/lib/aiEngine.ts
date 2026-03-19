@@ -383,8 +383,29 @@ ORDERBOOK: BidAsk=${obImbalance}
 SESSION: ${tradingSession}
 RECENT TODAY: ${todaySummary}
 
-DAY TRADING RULES:
-- Only trade WITH 1H trend direction
+TREND ALIGNMENT RULES:
+- 1H trend BULLISH (EMA20 > EMA50 on 1H):
+  → Valid entries: LONG only
+  → Skip all SHORT signals
+  
+- 1H trend BEARISH (EMA20 < EMA50 on 1H):
+  → Valid entries: SHORT only  
+  → Skip all LONG signals
+
+BIAS ALIGNMENT:
+- biasSide = PREFER_SHORT means: funding shows longs overcrowded
+  → Strongly consider SHORT entries
+  → If 1H also BEARISH → HIGH CONVICTION SHORT ✅
+  → If 1H BULLISH → conflict, reduce confidence, may still SHORT
+
+- biasSide = PREFER_LONG means: funding shows shorts overcrowded
+  → Strongly consider LONG entries
+  → If 1H also BULLISH → HIGH CONVICTION LONG ✅
+  → If 1H BEARISH → conflict, reduce confidence, may still LONG
+
+- biasSide = NEUTRAL → follow technicals only
+
+ENTRY RULES:
 - Entry on 15m confirmation
 - Stop loss: 1x ATR from entry
 - Take profit: 2x ATR minimum (R/R >= 1:2)
@@ -392,6 +413,9 @@ DAY TRADING RULES:
 - Leverage: 2x default, 3x only if ADX_1h > 30
 - SKIP if RSI_15m > 72 or < 28
 - SKIP if Friday after 20:00 WIB (weekend risk)
+
+IMPORTANT: PREFER_SHORT + BEARISH_1H = HIGH CONVICTION SHORT opportunity. Do NOT skip this setup. This is exactly the contrarian squeeze signal we are hunting.
+IMPORTANT: PREFER_LONG + BULLISH_1H = HIGH CONVICTION LONG opportunity. Do NOT skip this setup.
 
 JSON only, no markdown:
 {"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}

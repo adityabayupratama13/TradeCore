@@ -137,7 +137,7 @@ export async function manageOpenPositions() {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-export async function executeAIAndTrade(symbol: string, triggerData: any = null, isManual = false): Promise<void> {
+export async function executeAIAndTrade(symbol: string, triggerData: any = null, isManual = false): Promise<any> {
   cycleNumber++;
 
   try {
@@ -146,7 +146,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
        const testFired = await prisma.appSettings.findUnique({ where: { key: 'test_trade_fired' } });
        if (testFired) {
           console.log('[TEST MODE] Blocked - engine already executed 1 test trade. Set ENGINE_TEST_MODE=false to resume live trading.');
-          return;
+          return { success: false, reason: 'TEST MODE ALREADY FIRED 1 TRADE' };
        }
     }
 
@@ -276,13 +276,13 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     
     if (signal.action === 'SKIP') {
       await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `AI SKIP: ${signal.reasoning}` });
-      return;
+      return { success: false, reason: `AI SKIP: ${signal.reasoning}` };
     }
 
     if (isTestMode) {
       if (signal.confidence < 50) {
          await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Test mode low confidence: ${signal.confidence}` });
-         return;
+         return { success: false, reason: `Test mode low confidence: ${signal.confidence}` };
       }
       signal.leverage = 1;
       positionSizeMult = 1.0; 
@@ -380,8 +380,11 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
          await prisma.appSettings.create({ data: { key: 'test_trade_fired', value: 'true' } });
       }
 
+      return { success: true, order: res, signal };
+
     } catch (execErr: any) {
       await logEngine({ symbol, action: signal.action, signal, result: 'ERROR', reason: execErr.message });
+      return { success: false, reason: `EXECUTION ERROR: ${execErr.message}` };
     }
 
     await prisma.appSettings.upsert({
@@ -392,6 +395,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
 
   } catch (globalErr: any) {
     console.error('CRITICAL ENGINE LOOP FAILURE:', globalErr);
+    return { success: false, reason: `CRITICAL ERROR: ${globalErr.message}` };
   }
 }
 

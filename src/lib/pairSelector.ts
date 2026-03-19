@@ -4,7 +4,7 @@ import { fetchOIDataRaw } from './binance';
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
 const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
 
-const SAFE_UNIVERSE = [
+const SAFE_UNIVERSE = new Set([
   'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT',
   'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT',
   'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'LTCUSDT',
@@ -15,7 +15,8 @@ const SAFE_UNIVERSE = [
   'RENDERUSDT', 'TAOUSDT', 'WLDUSDT', 'JUPUSDT',
   'STRKUSDT', 'DYMUSDT', 'ALTUSDT', 'EIGENUSDT',
   'MOVEUSDT', 'MEUSDT', 'PNUTUSDT', 'ACTUSDT',
-];
+  'ENAUSDT', 'NEIROUSDT', 'TURBOUSDT', 'KAIAUSDT',
+]);
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 function chunks<T>(arr: T[], size: number): T[][] {
@@ -183,7 +184,7 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
 
 export async function runDynamicHunter(): Promise<HunterResult> {
   console.log('🦅 Hunter: Starting scan...');
-  console.log('📋 SAFE_UNIVERSE contains:', SAFE_UNIVERSE.length, 'coins');
+  console.log('📋 SAFE_UNIVERSE contains:', SAFE_UNIVERSE.size, 'coins');
 
   const [fundingRes, tickerRes] = await Promise.all([
     fetch(`${BINANCE_BASE_URL}/fapi/v1/premiumIndex`),
@@ -212,11 +213,24 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     }
   });
 
+  // First filter — before anything else:
+  const safeCoins = rawPairs.filter(p => SAFE_UNIVERSE.has(p.symbol));
+
+  console.log(`Total pairs: ${rawPairs.length}`);
+  console.log(`After SAFE_UNIVERSE: ${safeCoins.length} pairs`);
+  console.log(`Excluded: ${rawPairs.length - safeCoins.length} pairs`);
+
+  // Explicitly log if dangerous coin somehow passes:
+  rawPairs.forEach(p => {
+    if (!SAFE_UNIVERSE.has(p.symbol) && Math.abs(p.fundingRate) > 0.001) {
+      console.log(`🚫 BLOCKED dangerous coin: ${p.symbol} funding ${parseFloat(String(p.fundingRate)).toFixed(4)}`);
+    }
+  });
+
   const totalScanned = rawPairs.length;
   
   // STEP 2 - HARD FILTERS
-  const afterWhitelist = rawPairs.filter(p => SAFE_UNIVERSE.includes(p.symbol));
-  const afterVolume = afterWhitelist.filter(p => p.volume24h >= 100_000_000);
+  const afterVolume = safeCoins.filter(p => p.volume24h >= 100_000_000);
   const afterFunding = afterVolume.filter(p => Math.abs(p.fundingRate) <= 0.005);
   
   const validPairs = afterFunding.filter(p => {
@@ -228,14 +242,9 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     return true;
   });
 
-  console.log(`After SAFE_UNIVERSE filter: ${afterWhitelist.length} pairs`);
   console.log(`After volume filter: ${afterVolume.length} pairs`);
   console.log(`After funding rate cap: ${afterFunding.length} pairs`);
   console.log(`Final candidates: ${validPairs.length} pairs`);
-
-  if (validPairs.some(p => p.symbol === 'COMMONUSDT' || p.symbol === 'TOKENUSDT')) {
-    console.error('🚨 UNSAFE COIN SLIPPED THROUGH:', validPairs.find(p => p.symbol === 'COMMONUSDT' || p.symbol === 'TOKENUSDT')?.symbol);
-  }
 
   const totalPassed = validPairs.length;
 
