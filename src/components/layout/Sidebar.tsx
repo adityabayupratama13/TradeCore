@@ -51,27 +51,23 @@ export function Sidebar({ isCollapsed, isMobileOpen, toggle }: SidebarProps) {
   }, []);
 
   return (
-    <div className={`fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out bg-[#0E1628] border-r border-[#1a2540] flex flex-col z-[110] transform ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} w-[var(--current-sidebar-width)] overflow-hidden`}>
-      {/* Logo */}
-      <div className={`flex items-center h-[var(--header-height)] border-b border-[#1a2540] transition-all whitespace-nowrap ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-6'}`}>
-        <Hexagon className="w-6 h-6 text-[#00D4AA] fill-[#00D4AA]/20 shrink-0" />
-        {!isCollapsed && <span className="font-bold text-white tracking-wider">TRADE CORE</span>}
-      </div>
-
+    <div 
+      className={`fixed left-0 transition-all duration-300 ease-in-out bg-[#0E1628] border-r border-[#1a2540] flex flex-col z-[90] transform ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} w-[var(--current-sidebar-width,240px)] overflow-hidden`}
+      style={{ top: '60px', height: 'calc(100vh - 60px)' }}
+    >
       {/* Toggle Button */}
       <div className="flex border-b border-[#1a2540]">
         <button 
           onClick={toggle}
-          className={`w-full flex items-center p-3 text-gray-400 hover:text-white hover:bg-white/5 transition-colors ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+          className="w-full flex items-center justify-center p-3 text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
-          {!isCollapsed && <span className="text-xs uppercase font-bold tracking-wider opacity-60">Menu</span>}
-          {isCollapsed ? <ChevronRight className="w-5 h-5 mx-auto" /> : <ChevronLeft className="w-5 h-5" />}
+          {isCollapsed ? <ChevronRight className="w-5 h-5 mx-auto" /> : <ChevronLeft className="w-5 h-5 mx-auto" />}
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto no-scrollbar">
+      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto no-scrollbar">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;

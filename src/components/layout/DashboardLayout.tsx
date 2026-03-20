@@ -53,12 +53,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <TopBar onToggleSidebar={() => setIsMobileOpen(true)} isCollapsed={isCollapsed} />
 
         {/* Scrollable Page Content */}
-        <main className="flex-1 pt-[var(--header-height)] z-10 p-3 md:p-6 overflow-y-auto min-h-screen w-full">
-          <div className="w-full">
+        <main 
+          className="flex-1 overflow-y-auto w-full relative z-[1]"
+          style={{ paddingTop: '60px', minHeight: '100vh' }}
+        >
+          <div className="w-full p-3 md:p-6">
             <CircuitBreakerBanner />
-          </div>
-          <div className="max-w-[1600px] mx-auto mt-6">
-            {children}
+            <div className="max-w-[1600px] mx-auto mt-6">
+              {children}
+            </div>
           </div>
         </main>
         

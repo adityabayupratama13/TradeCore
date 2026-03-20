@@ -170,7 +170,7 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
 }
 
 export async function runDynamicHunter(): Promise<HunterResult> {
-  const OVERRIDE_ACTIVE = true;  // set false to re-enable hunter
+  const OVERRIDE_ACTIVE = false;  // set false to re-enable hunter
   
   if (OVERRIDE_ACTIVE) {
     const ACTIVE_PAIRS_OVERRIDE = [
@@ -376,57 +376,49 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   });
 
   // STEP 5 - SELECT ACTIVE TRADING PAIRS
-  let eligibleActive = watchlist.filter(p => 
-    p.oiSignal.type === 'SHORT_SQUEEZE_SETUP' || 
-    p.oiSignal.type === 'LONG_SQUEEZE_SETUP' || 
-    (
-      (p.squeezeRisk === 'LOW' || p.squeezeRisk === 'MEDIUM') &&
-      p.volume24h > 50_000_000 &&
-      (p.fundingCategory === 'EXTREME' || p.fundingCategory === 'HIGH')
-    )
-  );
+  // Select top 10 from scored pairs
+  const top10 = scoredPairs
+    .filter(p => p.fundingCategory !== 'NORMAL')
+    .slice(0, 10);
 
-  const finalActive: ScoredPair[] = [];
-  
-  // Add top scored eligible pairs first (max 5)
-  for (const p of scoredPairs) {
-    if (finalActive.length >= 5) break;
-    finalActive.push({ ...p, tier: 'ACTIVE' });
+  // Guarantee minimum pairs with fallback
+  const FALLBACK = [
+    'BTCUSDT','ETHUSDT','SOLUSDT',
+    'DOGEUSDT','HYPEUSDT'
+  ];
+
+  while (top10.length < 5) {
+    const fallback = FALLBACK.find(s => 
+      !top10.some(p => p.symbol === s)
+    );
+    if (!fallback) break;
+    top10.push({
+      symbol: fallback,
+      fundingRate: 0,
+      markPrice: 0,
+      volume24h: 100000000,
+      priceChange24h: 0,
+      highPrice24h: 0,
+      lowPrice24h: 0,
+      absFundingRate: 0,
+      fundingCategory: 'NORMAL',
+      direction: 'NEUTRAL',
+      biasSide: 'NEUTRAL',
+      squeezeRisk: 'LOW',
+      score: 0,
+      tier: 'ACTIVE',
+      oiData: {
+        symbol: fallback, currentOI: 0, currentOIValue: 0, oiChange1h: 0, oiChange4h: 0, oiChange24h: 0,
+        oiTrend: 'STABLE', oiMomentum: 0, longRatio: 0.5, shortRatio: 0.5, lsRatio: 1, topTraderLsRatio: 1,
+        takerBuyRatio: 0.5, takerSellRatio: 0.5, oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' }
+      },
+      oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' },
+      oiValue: '—',
+      oiChange1h: 'N/A'
+    });
   }
 
-  // If we don't naturally find 5, pad with SAFEST large caps (guaranteed objects)
-  const FALLBACKS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT'];
-  if (finalActive.length < 5) {
-     for (const symbol of FALLBACKS) {
-       if (finalActive.length >= 5) break; 
-       if (!finalActive.some(s => s.symbol === symbol)) {
-          finalActive.push({
-             symbol,
-             fundingRate: 0,
-             markPrice: 0,
-             volume24h: 100000000,
-             priceChange24h: 0,
-             highPrice24h: 0,
-             lowPrice24h: 0,
-             absFundingRate: 0,
-             fundingCategory: 'NORMAL',
-             direction: 'NEUTRAL',
-             biasSide: 'NEUTRAL',
-             squeezeRisk: 'LOW',
-             score: 0,
-             tier: 'ACTIVE',
-             oiData: {
-                symbol, currentOI: 0, currentOIValue: 0, oiChange1h: 0, oiChange4h: 0, oiChange24h: 0,
-                oiTrend: 'STABLE', oiMomentum: 0, longRatio: 0.5, shortRatio: 0.5, lsRatio: 1, topTraderLsRatio: 1,
-                takerBuyRatio: 0.5, takerSellRatio: 0.5, oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' }
-             },
-             oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' },
-             oiValue: '—',
-             oiChange1h: 'N/A'
-          });
-       }
-     }
-  }
+  const finalActive = top10.map(p => ({ ...p, tier: 'ACTIVE' as const }));
   
   console.log('🎯 Final active pairs:', finalActive.map(p => p.symbol));
 

@@ -85,28 +85,28 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
   const activeModeData = getModeConfig(statusData.activeMode);
 
   return (
-    <div className="fixed top-0 left-0 md:left-[var(--current-sidebar-width)] right-0 h-[var(--header-height)] bg-[#0E1628]/95 backdrop-blur z-50 border-b border-[#1a2540] flex items-center justify-between px-4 md:px-6 transition-all duration-300">
+    <div className="fixed top-0 left-0 right-0 h-[var(--header-height,60px)] bg-[#0E1628]/95 backdrop-blur z-[100] border-b border-[#1a2540] flex items-center justify-between px-4 md:px-6 transition-all duration-300">
       
       {/* MOBILE LEFT: Hamburger */}
       <button onClick={onToggleSidebar} className="md:hidden text-white p-2 -ml-2">
         <svg fill="currentColor" viewBox="0 0 20 20" className="w-6 h-6"><path fillRule="evenodd" d="M3 5h14a1 1 0 110 2H3a1 1 0 010-2zM3 10h14a1 1 0 110 2H3a1 1 0 010-2zM3 15h14a1 1 0 110 2H3a1 1 0 010-2z" clipRule="evenodd" /></svg>
       </button>
 
-      {/* MOBILE CENTER: Logo */}
-      <div className="md:hidden font-bold tracking-wider text-white text-md absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+      {/* FULL WIDTH CENTER/LEFT: Logo */}
+      <div className="font-bold tracking-wider text-white text-md absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0 flex items-center gap-2 pointer-events-none md:pointer-events-auto md:w-[240px]">
          <span className="text-[#00D4AA]">⬡</span>
          TRADE CORE
       </div>
 
-      {/* DESKTOP Title */}
-      <div className="hidden md:flex flex-1">
+      {/* DESKTOP Title (Optional, hidden on mobile) */}
+      <div className="hidden md:flex flex-1 pl-4 border-l border-[#1a2540]/30 ml-4">
         <h1 className="text-lg font-semibold text-white">
           {getPageTitle(pathname)}
         </h1>
       </div>
 
       {/* Status Chips */}
-      <div className="flex items-center gap-2 md:gap-4 flex-none ml-auto md:ml-0">
+      <div className="flex items-center gap-2 md:gap-4 flex-none ml-auto">
         
         {/* Total Capital */}
         <div className="hidden md:flex flex-col text-right">
