@@ -230,6 +230,56 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
        return;
     }
 
+    const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
+
+    const pauseSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_pause_until' } });
+    if (pauseSetting && pauseSetting.value) {
+        const pauseUntil = parseInt(pauseSetting.value);
+        if (Date.now() < pauseUntil) {
+           console.log(`⏸️ Engine is paused until ${new Date(pauseUntil).toLocaleTimeString()}`);
+           return;
+        }
+    }
+
+    const startOfDay = new Date(new Date().setHours(0,0,0,0));
+    const todayTrades = await prisma.trade.findMany({ where: { entryAt: { gte: startOfDay } } });
+    let wins = 0, losses = 0;
+    todayTrades.forEach((t: any) => {
+       if (t.status === 'CLOSED' && t.exitPrice) {
+          const p = t.pnlPct || ((t.direction === 'LONG' ? (t.exitPrice - t.entryPrice) : (t.entryPrice - t.exitPrice)) / t.entryPrice) * (t.leverage || 1) * 100;
+          if (p >= 0) wins++; else losses++;
+       }
+    });
+
+    const totalTradesToday = todayTrades.length;
+    const closedCount = wins + losses;
+    const winRate = closedCount > 0 ? (wins / closedCount) * 100 : 100;
+
+    let dynamicMinConf = Math.max(riskRule?.minConfidence ?? 70, 70);
+
+    if (totalTradesToday >= 8 && winRate < 50) {
+        console.log(`⏸️ Engine paused: 8 trades reached with ${winRate.toFixed(1)}% win rate. Engine pausing for 2 hours cooldown.`);
+        await prisma.appSettings.upsert({
+           where: { key: 'engine_pause_until' },
+           update: { value: (Date.now() + 2 * 3600 * 1000).toString() },
+           create: { key: 'engine_pause_until', value: (Date.now() + 2 * 3600 * 1000).toString() }
+        });
+        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⏸️ Engine paused: 8 trades, win rate too low (${winRate.toFixed(1)}%). Review market conditions.` } } as any);
+        return;
+    } else if (totalTradesToday >= 5 && winRate < 40) {
+        dynamicMinConf = Math.max(dynamicMinConf, 80);
+        const alertedSetting = await prisma.appSettings.findUnique({ where: { key: `winrate_alert_${startOfDay.getTime()}` } });
+        if (!alertedSetting) {
+            console.log("⚠️ Low win rate detected. Raising confidence bar.");
+            await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⚠️ Win rate below 40% today (${winRate.toFixed(1)}%). Tightening entry criteria to 80% confidence.` } } as any);
+            await prisma.appSettings.upsert({
+               where: { key: `winrate_alert_${startOfDay.getTime()}` },
+               update: { value: 'TRUE' },
+               create: { key: `winrate_alert_${startOfDay.getTime()}`, value: 'TRUE' }
+            });
+        }
+    }
+
     const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
     let activePairs = [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
     if (setting?.value) { try { activePairs = JSON.parse(setting.value); } catch(e){} }
@@ -237,7 +287,6 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     // Filter out already open symbols
     const availablePairs = activePairs.filter((p: any) => !currentSymbols.has(p.symbol));
 
-    const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
     const maxPositions = riskRule?.maxOpenPositions ?? 5;
     const availableSlots = maxPositions - currentSymbols.size;
 
@@ -251,10 +300,17 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       availablePairs.map((pair: any) => analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE'))
     );
 
-    const minConf = riskRule?.minConfidence ?? 65;
+    const minConf = dynamicMinConf;
 
     const validSignals = signals
-      .filter(s => s.action !== 'SKIP' && s.confidence >= minConf)
+      .filter(s => {
+         if (s.action === 'SKIP') return false;
+         if (s.confidence < minConf) {
+            console.log(`⏭️ Confidence ${s.confidence} < ${minConf} for ${s.symbol}. Skip.`);
+            return false;
+         }
+         return true;
+      })
       .sort((a, b) => b.confidence - a.confidence);
 
     console.log(`✅ Valid signals: ${validSignals.length} (>=${minConf}%). Executing up to ${availableSlots}...`);
@@ -328,9 +384,14 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     }
 
     // NEW FIX 3: DYNAMIC POSITION SIZING
-    const { quantity, margin, leverage, liqPrice, adjustedSl } = await calculatePositionSize(
+    const positionDetails = await calculatePositionSize(
       symbol, signal.entryPrice, signal.stopLoss, signal.action === 'LONG' ? 'BUY' : 'SELL', totalWalletBalance, signal.confidence
     );
+    if (!positionDetails) {
+       await logEngine({ symbol, action: signal.action, result: 'BLOCKED', reason: `Position calculation failed or insufficient safety balance.` });
+       return;
+    }
+    const { quantity, margin, leverage, liqPrice, adjustedSl } = positionDetails;
     signal.stopLoss = adjustedSl;
     signal.leverage = leverage;
 
@@ -460,9 +521,21 @@ export async function calculatePositionSize(
   entryPrice: number,
   stopLoss: number,
   side: 'BUY' | 'SELL',
-  totalCapital: number,
+  _ignoredCapital: number, // Removed totalCapital dependency
   signalConfidence: number
-): Promise<{ quantity: number, margin: number, leverage: number, liqPrice: number, adjustedSl: number }> {
+): Promise<{ quantity: number, margin: number, leverage: number, liqPrice: number, adjustedSl: number } | null> {
+  
+  const balance = await getBalance();
+  const usdtBalance = balance.find((b: any) => b.asset === 'USDT');
+  const totalCapital = usdtBalance?.availableBalance ?? 0;
+  
+  console.log(`💰 USDT Balance: $${totalCapital.toFixed(2)}`);
+  
+  if (totalCapital < 5) {
+    console.log('❌ Insufficient USDT balance < $5. Stopping.');
+    return null;
+  }
+
   const category = getCoinCategory(symbol);
   const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
 

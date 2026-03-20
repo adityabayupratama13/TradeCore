@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
+import { getBalance } from '../../../../../src/lib/binance';
 
 export async function GET(req: Request) {
   try {
@@ -22,27 +23,39 @@ export async function GET(req: Request) {
     // For simplicity, we calculate from inception and just slice the array.
     const allTrades = await prisma.trade.findMany({
       where: { status: 'CLOSED' },
-      orderBy: { exitAt: 'asc' }
+      orderBy: { exitAt: 'desc' }
     });
 
-    let currentEquity = portfolio.totalCapital;
+    const balances = await getBalance();
+    const usdtBalance = balances.find((b: any) => b.asset === 'USDT');
+    let currentEquity = usdtBalance?.balance ?? 0;
+
     const fullCurve: Array<{time: string, value: number}> = [];
     
-    // Inception point
+    // Push current actual balance today
     fullCurve.push({
-      time: portfolio.createdAt.toISOString().split('T')[0],
+      time: new Date().toISOString().split('T')[0],
       value: currentEquity
     });
 
+    // Walk backward to reconstruct history accurately entirely in USDT
     allTrades.forEach(t => {
       if (t.exitAt) {
-        currentEquity += (t.pnl || 0);
+        currentEquity -= (t.pnl || 0); // Subtract PnL to find balance BEFORE this trade!
         fullCurve.push({
           time: t.exitAt.toISOString().split('T')[0],
           value: currentEquity
         });
       }
     });
+
+    // Inception point before all trades
+    if (portfolio) {
+      fullCurve.push({
+        time: portfolio.createdAt.toISOString().split('T')[0],
+        value: currentEquity
+      });
+    }
 
     // Deduplicate by day (take the last value of the day)
     const dailyMap: Record<string, number> = {};

@@ -1,7 +1,7 @@
 import { getKlines, getMarkPrice } from './binance';
 import { prisma } from '../../lib/prisma';
 import { executeAIAndTrade } from './tradingEngine';
-import { calculateEMA, calculateRSI, calculateVolumeProfile } from './aiEngine';
+import { calculateEMA, calculateRSI, calculateVolumeProfile, calculateADX } from './aiEngine';
 import { SAFE_UNIVERSE, FALLBACK_PAIRS } from './constants';
 
 export interface TriggerResult {
@@ -67,8 +67,9 @@ export async function runPriceWatcher(): Promise<void> {
 async function checkTriggersForPair(symbol: string, pair: any) {
   if (!SAFE_UNIVERSE.has(symbol)) return;
 
-  const [klines15m, markPriceObj] = await Promise.all([
+  const [klines15m, klines1h, markPriceObj] = await Promise.all([
     getKlines(symbol, '15m', 50),
+    getKlines(symbol, '1h', 50),
     getMarkPrice(symbol)
   ]);
 
@@ -138,7 +139,22 @@ async function checkTriggersForPair(symbol: string, pair: any) {
   const minsSinceLLM = (Date.now() - lastCallTime) / 60000;
   
   if (!trigger && minsSinceLLM >= 90) {
-     trigger = { triggered: true, symbol, triggerType: 'SCHEDULED_FALLBACK', strength: 1 };
+      const closes1h = klines1h.map(k => k.close);
+      const highs1h = klines1h.map(k => k.high);
+      const lows1h = klines1h.map(k => k.low);
+      const adx1h = calculateADX(highs1h, lows1h, closes1h, 14);
+      const volRatio = currentVol / avgVol;
+      
+      if (adx1h > 25 && volRatio > 1.2 && currRsi >= 35 && currRsi <= 65) {
+         trigger = { triggered: true, symbol, triggerType: 'SCHEDULED_FALLBACK', strength: 2 };
+      } else {
+         console.log(`⏭️ ${symbol} 90m cycle conditions not met (ADX 1h: ${adx1h.toFixed(1)}, VolRatio: ${volRatio.toFixed(2)}, RSI: ${currRsi.toFixed(1)}). Skipping.`);
+      }
+  }
+
+  if (trigger && trigger.strength < 2) {
+    console.log(`⏭️ ${symbol} trigger strength ${trigger.strength} < 2. Skip.`);
+    return;
   }
 
   if (trigger) {

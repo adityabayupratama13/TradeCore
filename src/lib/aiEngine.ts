@@ -74,15 +74,15 @@ function enforceMinRR(signal: any): any {
     
     signal.takeProfit = tp;
     signal.riskReward = 2.5;
-    console.log(`✅ TP adjusted to: ${signal.takeProfit} (R/R 1:2.5)`);
+    console.log(`📐 R/R enforced to 2.5 for ${signal.symbol}`);
   }
   
   const finalTpDistance = Math.abs(entry - signal.takeProfit);
   const finalRR = finalTpDistance / slDistance;
   
   if (finalRR < 1.5) {
-    console.log(`❌ R/R still too low after adjustment: ${finalRR}. Skipping trade.`);
     signal.action = 'SKIP';
+    console.log(`❌ R/R ${finalRR.toFixed(2)} too low. Forced SKIP.`);
     signal.reasoning = `R/R ${finalRR.toFixed(2)} below minimum 1.5`;
   }
   
@@ -200,7 +200,7 @@ export function calculateATR(highs: number[], lows: number[], closes: number[], 
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
-function calculateADX(highs: number[], lows: number[], closes: number[], period: number = 14): number {
+export function calculateADX(highs: number[], lows: number[], closes: number[], period: number = 14): number {
   // Simplified ADX calculation (directional movement proxy)
   // Implementing a true Wilder's ADX is heavy, we'll proxy it using TR and DX approximations
   const atr = calculateATR(highs, lows, closes, period);
@@ -529,16 +529,18 @@ ENTRY RULES:
 IMPORTANT: PREFER_SHORT + BEARISH_1H = HIGH CONVICTION SHORT opportunity. Do NOT skip this setup. This is exactly the contrarian squeeze signal we are hunting.
 IMPORTANT: PREFER_LONG + BULLISH_1H = HIGH CONVICTION LONG opportunity. Do NOT skip this setup.
 
-CRITICAL R/R RULE:
-Take profit MUST be minimum 2x the stop loss distance.
-Calculate example:
-  SHORT entry 69745, SL 69980:
-  SL distance = 69980 - 69745 = 235 points
-  TP must be AT LEAST 235 × 2 = 470 points below entry
-  TP = 69745 - 470 = 69275 (MINIMUM)
-  TP = 69745 - 587 = 69158 (better, 1:2.5)
+CRITICAL R/R RULE — NON NEGOTIABLE:
+stop_loss distance × 2.5 = minimum take_profit distance.
 
-NEVER set TP at 1:1 ratio — always minimum 1:2
+Example SHORT:
+  Entry: 70000
+  SL: 70700 → distance = 700
+  TP MINIMUM: 70000 - (700 × 2.5) = 68250
+  
+If you cannot find a valid TP at 2.5x SL distance
+within reasonable price targets → action = SKIP.
+
+NEVER suggest TP closer than 2x SL distance.
 
 JSON only, no markdown:
 {"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}
