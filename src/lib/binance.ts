@@ -416,7 +416,7 @@ export async function fetchOIDataRaw(symbol: string) {
     safeFetch(`${MAIN_URL}/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`),
     safeFetch(`${MAIN_URL}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=1h&limit=2`),
     safeFetch(`${MAIN_URL}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=1h&limit=2`),
-    safeFetch(`${MAIN_URL}/futures/data/takervolumelongshort?symbol=${symbol}&period=15m&limit=2`)
+    safeFetch(`${MAIN_URL}/futures/data/takerlongshortRatio?symbol=${symbol}&period=15m&limit=2`)
   ]);
   
   return { currentOI, oiHist, lsRatioAcc, topTraderPos, takerVol };
