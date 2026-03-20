@@ -25,8 +25,12 @@ export function TopBar() {
   // In a real app, these values would come from context or SWR/RQ hooks
   const [statusData, setStatusData] = useState({
     totalCapital: 0,
-    todayPnl: 0,
-    todayPnlPct: 0,
+    dailyPnl: 0,
+    dailyPnlPct: 0,
+    dailyLossUsed: 0,
+    dailyLossLimit: 10,
+    isLocked: false,
+    lockedUntil: null as string | null,
     drawdownPct: 0,
     riskStatus: 'SAFE',
     activeMode: 'SAFE'
@@ -49,10 +53,14 @@ export function TopBar() {
     ]).then(([portfolio, perf, risk]) => {
       setStatusData({
         totalCapital: portfolio?.totalCapital || 0,
-        todayPnl: perf?.dailyPnl || 0,
-        todayPnlPct: perf?.winRate || 0, // Using win rate as placeholder if pct not available
+        dailyPnl: perf?.dailyPnl || 0,
+        dailyPnlPct: perf?.dailyPnlPct || 0,
+        dailyLossUsed: perf?.dailyLossUsed || 0,
+        dailyLossLimit: perf?.dailyLossLimit || 10,
+        isLocked: perf?.isLocked || false,
+        lockedUntil: perf?.lockedUntil || null,
         drawdownPct: risk?.drawdownPct || 0,
-        riskStatus: risk?.status || 'SAFE',
+        riskStatus: perf?.isLocked ? 'LOCKED' : (risk?.status || 'SAFE'),
         activeMode: risk?.rules?.activeMode || 'SAFE'
       });
     }).catch(console.error);
@@ -103,8 +111,8 @@ export function TopBar() {
         {/* Today P&L */}
         <div className="flex flex-col text-right">
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Today P&L</span>
-          <span className={`text-sm font-mono font-medium ${statusData.todayPnl >= 0 ? "text-[#00D4AA]" : "text-[#FF4757]"}`}>
-            {statusData.todayPnl >= 0 ? "+" : ""}{formatIDR(statusData.todayPnl)}
+          <span className={`text-sm font-mono font-medium ${statusData.dailyPnl >= 0 ? "text-[#00D4AA]" : "text-[#FF4757]"}`}>
+            {statusData.dailyPnl >= 0 ? "+" : "-"}{Math.abs(statusData.dailyPnlPct).toFixed(2)}%
           </span>
         </div>
 

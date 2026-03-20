@@ -11,6 +11,7 @@ export default function EngineDashboard() {
   const [hunterWatchlist, setHunterWatchlist] = useState<any[]>([]);
   const [hunterActive, setHunterActive] = useState<any[]>([]);
   const [hunterScanning, setHunterScanning] = useState(false);
+  const [emergencyLocked, setEmergencyLocked] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -73,6 +74,13 @@ export default function EngineDashboard() {
             alert(`❌ Error: ${data.error || 'Test trade failed'}`);
          } else {
             alert(`✅ Order #${data.orderId} — ${data.side} ${data.symbol} @ $${data.price}\nCheck Binance Demo → Positions tab`);
+         }
+      } else if (endpoint === 'manual-lock') {
+         const res = await fetch(`/api/engine/manual-lock`, { method: 'POST' });
+         const data = await res.json();
+         if (data.success) {
+            setEmergencyLocked(true);
+            alert(`✅ ${data.message}`);
          }
       } else {
          await fetch(`/api/engine/${endpoint}`, { method: 'POST' });
@@ -157,8 +165,29 @@ export default function EngineDashboard() {
           >
             <Zap className="w-4 h-4" /> 🧪 TEST TRADE
           </button>
+          <button 
+            onClick={() => handleAction('manual-lock')}
+            disabled={actionLoading || emergencyLocked}
+            className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white border border-red-500 rounded-lg transition-all font-bold tracking-wide shadow-lg disabled:opacity-50"
+          >
+            🔒 LOCK TRADING NOW
+          </button>
         </div>
       </div>
+
+      {emergencyLocked && (
+        <div className="bg-red-500/20 border-l-4 border-red-500 p-4 rounded-r-lg mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex gap-3">
+            <AlertCircle className="text-red-500 w-6 h-6 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-red-500 font-bold text-lg">🚨 TRADING LOCKED (EMERGENCY)</h3>
+              <p className="text-red-400 text-sm mt-1 mb-0">
+                Circuit breaker is active. All new entries are blocked. Open orders were cancelled.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* UNPROTECTED POSITIONS BANNER */}
       {status?.unprotectedPositions?.length > 0 && (

@@ -139,6 +139,7 @@ export async function manageOpenPositions() {
          if (profitPct > 0) {
              await closePosition(trade.symbol, trade.quantity);
              await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnlPct: profitPct } });
+             await checkAndEnforceCircuitBreaker();
              await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'Max hold 8h reached', pnl: Math.round(profitRaw * trade.quantity * 16000), pnlPct: profitPct.toFixed(2), holdDuration: '8h' }});
              continue;
          } else {
@@ -152,6 +153,7 @@ export async function manageOpenPositions() {
          if (profitPct > 0.5) {
              await closePosition(trade.symbol, trade.quantity);
              await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnlPct: profitPct } });
+             await checkAndEnforceCircuitBreaker();
              await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'NY session closing', pnl: Math.round(profitRaw * trade.quantity * 16000), pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
              continue;
          }

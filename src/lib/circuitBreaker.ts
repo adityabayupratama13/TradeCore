@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { cancelAllOrders, getPositions } from './binance';
 import { sendTelegramAlert } from './telegram';
+import { SAFE_UNIVERSE } from './constants';
 
 export interface CircuitBreakerStatus {
   canTrade: boolean;
@@ -63,14 +64,17 @@ async function calculateMetrics(
     };
   }
 
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const wibOffset = 7 * 60 * 60 * 1000;
+  const nowWIB = new Date(Date.now() + wibOffset);
+  const startOfTodayWIB = new Date(nowWIB);
+  startOfTodayWIB.setUTCHours(0, 0, 0, 0); 
+  const startOfDay = new Date(startOfTodayWIB.getTime() - wibOffset);
   
-  const tempStartOfWeek = new Date(now);
-  const day = tempStartOfWeek.getDay() || 7; // Get current day number, converting Sun. to 7
-  if (day !== 1) tempStartOfWeek.setHours(-24 * (day - 1)); // Set to previous Monday
-  tempStartOfWeek.setHours(0,0,0,0);
-  const startOfWeek = tempStartOfWeek;
+  const tempStartOfWeek = new Date(nowWIB);
+  const day = tempStartOfWeek.getUTCDay() || 7; 
+  if (day !== 1) tempStartOfWeek.setUTCHours(-24 * (day - 1));
+  tempStartOfWeek.setUTCHours(0,0,0,0);
+  const startOfWeek = new Date(tempStartOfWeek.getTime() - wibOffset);
 
   // Fetch closed trades for today and this week
   const recentTrades = await prisma.trade.findMany({
@@ -101,11 +105,11 @@ async function calculateMetrics(
     canTrade = false;
     isLocked = true;
     
-    // Lock until tomorrow 07:00 WIB
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    tomorrow.setHours(7, 0, 0, 0); // Local time, assuming system timezone is roughly WIB or used locally
-    lockedUntil = tomorrow.toISOString();
+    // Lock until tomorrow 00:00 WIB
+    const tomorrowWIB = new Date(nowWIB);
+    tomorrowWIB.setDate(nowWIB.getDate() + 1);
+    tomorrowWIB.setUTCHours(0, 0, 0, 0);
+    lockedUntil = new Date(tomorrowWIB.getTime() - wibOffset).toISOString();
     reason = `Daily loss limit of ${rules.maxDailyLossPct}% reached.`;
 
     await prisma.appSettings.upsert({
@@ -122,23 +126,22 @@ async function calculateMetrics(
       }
     });
 
-    try {
-      const positions = await getPositions();
-      for (const pos of positions) {
-        await cancelAllOrders(pos.symbol);
-      }
-      await sendTelegramAlert({
-        type: 'LOCK',
-        data: {
-          capital: startingCapital,
-          limit: rules.maxDailyLossPct,
-          lossPct: dailyLossPct.toFixed(2),
-          unlockTime: tomorrow.toLocaleTimeString()
-        }
-      });
-    } catch (err) {
-      console.error('Failed to cancel remote orders on CB Lock', err);
+    for (const sym of SAFE_UNIVERSE) {
+      try {
+        await cancelAllOrders(sym);
+      } catch (err) { }
     }
+    
+    await sendTelegramAlert({
+      type: 'LOCK',
+      data: {
+        capital: startingCapital,
+        limit: rules.maxDailyLossPct,
+        lossPct: dailyLossPct.toFixed(2),
+        unlockTime: new Date(lockedUntil).toLocaleString()
+      }
+    });
+    console.log('🔒 CIRCUIT BREAKER LOCKED until', lockedUntil);
   }
 
   // Check Weekly Limits

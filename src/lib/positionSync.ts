@@ -1,6 +1,8 @@
 import { getPositions, placeAlgoOrder, getAlgoOrder } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
+import { getCoinCategory } from './coinCategories';
+import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
 
 export async function syncPositions(): Promise<void> {
   try {
@@ -99,21 +101,17 @@ export async function syncPositions(): Promise<void> {
         });
 
         // 2. Alert
-        await sendTelegramAlert({
-          type: 'TRADE_CLOSE',
-          data: {
-            symbol: trade.symbol,
-            direction: trade.direction,
-            entry: trade.entryPrice,
-            exit: exitPrice,
-            pnl: `IDR ${(trade.pnl || 0).toLocaleString()}`,
-            pnlPct: (trade.pnlPct || 0).toFixed(2),
-            profit: isWin,
-            duration: 'Automated Cycle'
-          }
-        });
-
-      }
+            await sendTelegramAlert({
+                type: 'TRADE_CLOSE',
+                data: {
+                    symbol: trade.symbol, direction: trade.direction,
+                    exitPrice: exitPrice, pnl: Math.round((trade.pnl || 0) * 16000), // Assuming 16000 is a conversion factor
+                    pnlPct: (trade.pnlPct || 0).toFixed(2),
+                    reason: 'Closed on Binance'
+                }
+            });
+            await checkAndEnforceCircuitBreaker();
+        } else {     }
     }
 
   } catch (error) {
