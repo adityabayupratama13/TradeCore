@@ -421,3 +421,20 @@ export async function fetchOIDataRaw(symbol: string) {
   
   return { currentOI, oiHist, lsRatioAcc, topTraderPos, takerVol };
 }
+
+export async function getTotalCapitalUSD(): Promise<number> {
+  try {
+    const balance = await getBalance();
+    const usdt = balance.find((b: any) => b.asset === 'USDT');
+    return usdt?.balance ?? 0;
+  } catch {
+    const { prisma } = require('../../lib/prisma');
+    const portfolio = await prisma.portfolio.findFirst();
+    if (!portfolio) return 0;
+    
+    if (portfolio.totalCapital > 1000) {
+      return portfolio.totalCapital / 16500;
+    }
+    return portfolio.totalCapital;
+  }
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
-import { getBalance } from '../../../lib/binance';
+import { getBalance, getTotalCapitalUSD } from '../../../lib/binance';
 
 export async function GET() {
   try {
@@ -10,16 +10,9 @@ export async function GET() {
     }
     
     try {
-      const balances = await getBalance();
-      const usdt = balances.find((b: any) => b.asset === 'USDT');
-      if (usdt && usdt.balance > 0) {
-         const idrValue = usdt.balance * 16000;
-         await prisma.portfolio.update({
-            where: { id: portfolio.id },
-            data: { totalCapital: idrValue }
-         });
-         portfolio.totalCapital = idrValue;
-      }
+      const capital = await getTotalCapitalUSD();
+      portfolio.totalCapital = capital;
+      portfolio.currency = 'USD';
     } catch(e) {
        console.error("Binance sync fail portfolio route", e);
     }

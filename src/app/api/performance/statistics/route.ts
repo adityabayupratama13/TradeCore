@@ -1,3 +1,4 @@
+import { getTotalCapitalUSD } from '../../../../lib/binance';
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { calculateProfitFactor, calculateStreaks, calculateMaxDrawdown } from '../../../../lib/performanceCalculations';
@@ -10,7 +11,7 @@ export async function GET() {
     });
 
     const portfolio = await prisma.portfolio.findFirst();
-    const startingCapital = portfolio?.totalCapital || 1;
+    const startingCapital = (await getTotalCapitalUSD()) || 1;
 
     const computeTableMetrics = (set: any[]) => {
       let totalWins = 0;

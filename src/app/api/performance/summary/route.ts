@@ -1,3 +1,4 @@
+import { getTotalCapitalUSD } from '../../../../lib/binance';
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { calculateProfitFactor, calculateMaxDrawdown, calculateSharpeRatio } from '../../../../lib/performanceCalculations';
@@ -15,7 +16,7 @@ export async function GET() {
     });
 
     // Equity Curve & Drawdown
-    let currentEquity = portfolio.totalCapital;
+    let currentEquity = (await getTotalCapitalUSD());
     const equityCurve = [currentEquity];
     
     // Group monthly returns for Sharpe roughly
@@ -56,11 +57,12 @@ export async function GET() {
     const avgRiskReward = avgLoss > 0 ? avgWin / avgLoss : (avgWin > 0 ? 99 : 0);
 
     // Simplified Sharpe
-    const monthlyReturns = Object.values(monthlyPnL).map(pnl => pnl / portfolio.totalCapital); // simplistic % return per month
+    const resolvedCapital = await getTotalCapitalUSD();
+    const monthlyReturns = Object.values(monthlyPnL).map(pnl => pnl / resolvedCapital); // simplistic % return per month
     const sharpeRatio = calculateSharpeRatio(monthlyReturns);
 
-    const totalReturnIDR = currentEquity - portfolio.totalCapital;
-    const capitalUsdt = portfolio.totalCapital;
+    const totalReturnIDR = currentEquity - (await getTotalCapitalUSD());
+    const capitalUsdt = (await getTotalCapitalUSD());
     const totalReturnPct = (totalReturnIDR / capitalUsdt) * 100;
 
     return NextResponse.json({

@@ -1,3 +1,4 @@
+import { getTotalCapitalUSD } from '../../../../lib/binance';
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 
@@ -37,7 +38,7 @@ export async function GET() {
     });
 
     const dailyPnl = todayTrades.reduce((sum: number, trade: any) => sum + (trade.pnl || 0), 0);
-    const capitalUsdt = portfolio.totalCapital;
+    const capitalUsdt = (await getTotalCapitalUSD());
     const dailyLossPct = dailyPnl < 0 ? (Math.abs(dailyPnl) / capitalUsdt) * 100 : 0;
 
     // Check if we need to auto-lock now
@@ -75,7 +76,7 @@ export async function GET() {
       drawdownPct,
       isLocked,
       lockedUntil,
-      totalCapital: portfolio.totalCapital
+      totalCapital: (await getTotalCapitalUSD())
     });
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
