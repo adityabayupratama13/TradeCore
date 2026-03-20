@@ -352,15 +352,16 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
        await logEngine({ symbol, action: signal.action, signal, result: 'BLOCKED', reason: `Quantity too small: ${quantity}` });
        return; 
     }
-
     if (margin < 1.0) {
       console.log(`Position margin ${margin.toFixed(2)} < $1, skipping`);
+      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Calculated margin < $1` });
       return;
     }
 
     const hasMargin = await checkSufficientMargin(margin);
     if (!hasMargin) {
       console.log(`⏭️ Skipping ${signal.symbol} — insufficient margin`);
+      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Insufficient margin for $${margin.toFixed(2)} position` });
       return;
     }
 
