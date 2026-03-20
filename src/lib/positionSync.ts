@@ -1,4 +1,4 @@
-import { getPositions, placeAlgoOrder, getAlgoOrder } from './binance';
+import { getPositions, getOpenOrders, placeAlgoOrder } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { getCoinCategory } from './coinCategories';
@@ -14,11 +14,19 @@ export async function syncPositions(): Promise<void> {
       const existing = dbTrades.find(t => t.symbol === pos.symbol && t.status === 'OPEN');
       if (existing) {
         let hasSL = false;
-        if (existing.slAlgoId) {
-           try {
-              const algoStatus = await getAlgoOrder(pos.symbol, existing.slAlgoId);
-              if (algoStatus && algoStatus.algoStatus === 'WORKING') hasSL = true;
-           } catch(e) {}
+        try {
+           const openOrders = await getOpenOrders(pos.symbol);
+           const slOrder = openOrders.find((o: any) => o.type === 'STOP_MARKET' || o.type === 'STOP');
+           if (slOrder) {
+               hasSL = true;
+               if (!existing.slAlgoId || existing.slAlgoId !== slOrder.orderId.toString()) {
+                   await prisma.trade.update({ where: { id: existing.id }, data: { slAlgoId: slOrder.orderId.toString() } });
+               }
+           }
+        } catch(e) {
+           console.error(`[PosSync] Error fetching open orders for ${pos.symbol}:`, e);
+           // Fallback assume true to avoid spamming recreation if API errors natively
+           hasSL = true; 
         }
 
         if (!hasSL && existing.stopLoss) {
