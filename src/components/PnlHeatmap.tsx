@@ -1,3 +1,5 @@
+import { formatPnL } from "@/lib/formatters";
+
 interface DayData {
   date: string;
   pnl: number;
@@ -36,13 +38,7 @@ export function PnlHeatmap({ data }: { data: DayData[] }) {
   // We'll use CSS writing-mode or flex-col flex-wrap.
   // Container: grid grid-rows-7 grid-flow-col gap-1
 
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(val).replace('IDR', 'Rp');
-  };
+
 
   const getColor = (pct: number) => {
     if (pct > 3) return 'bg-[#00D4AA]'; // Large profit
@@ -82,7 +78,7 @@ export function PnlHeatmap({ data }: { data: DayData[] }) {
                     ) : (
                       <div className="space-y-1">
                         <div className={`text-sm font-mono font-bold ${dayInfo!.pnl >= 0 ? 'text-[#00D4AA]' : 'text-[#FF4757]'}`}>
-                          {dayInfo!.pnl >= 0 ? '+' : ''}{formatIDR(dayInfo!.pnl)} ({dayInfo!.pnlPct.toFixed(1)}%)
+                          {formatPnL(dayInfo!.pnl)} ({dayInfo!.pnlPct.toFixed(1)}%)
                         </div>
                         <div className="text-xs text-gray-400 font-medium">
                           {trades} Trades ({dayInfo!.wins}W / {dayInfo!.losses}L)

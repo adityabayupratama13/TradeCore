@@ -1,4 +1,5 @@
 import { Edit2, Trash2, Lightbulb } from "lucide-react";
+import { formatPnL } from "@/lib/formatters";
 
 const EMOTION_STYLES: Record<string, { bg: string, text: string, icon: string, label: string }> = {
   CALM: { bg: 'bg-[#00D4AA]/20', text: 'text-[#00D4AA]', icon: '😌', label: 'Calm' },
@@ -24,14 +25,7 @@ export function JournalCard({ entry, onClick, onEdit, onDelete }: JournalCardPro
 
   const em = EMOTION_STYLES[entry.emotionState] || EMOTION_STYLES['UNKNOWN'];
   
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: isCrypto ? 'USD' : 'IDR',
-      minimumFractionDigits: isCrypto ? 2 : 0,
-      maximumFractionDigits: isCrypto ? 2 : 0
-    }).format(val).replace('IDR', 'Rp').replace('USD', '$');
-  };
+
 
   // Hold time calculation
   let holdTimeStr = 'N/A';
@@ -71,7 +65,7 @@ export function JournalCard({ entry, onClick, onEdit, onDelete }: JournalCardPro
 
         <div className="text-right">
           <div className={`text-xl font-mono font-bold ${isWin ? 'text-[#00D4AA]' : 'text-[#FF4757]'}`}>
-            {isWin ? '+' : ''}{formatCurrency(pnl)}
+            {formatPnL(pnl)}
           </div>
           <div className={`text-xs mt-1 ${isWin ? 'text-[#00D4AA]/70' : 'text-[#FF4757]/70'}`}>
             {t?.pnlPct ? `${isWin ? '+' : ''}${t.pnlPct.toFixed(2)}%` : 'Manual'}

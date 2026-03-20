@@ -60,7 +60,7 @@ export async function GET() {
     const sharpeRatio = calculateSharpeRatio(monthlyReturns);
 
     const totalReturnIDR = currentEquity - portfolio.totalCapital;
-    const capitalUsdt = portfolio.totalCapital / 16000;
+    const capitalUsdt = portfolio.totalCapital;
     const totalReturnPct = (totalReturnIDR / capitalUsdt) * 100;
 
     return NextResponse.json({

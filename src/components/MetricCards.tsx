@@ -1,4 +1,5 @@
 import { TrendingUp, Award, Activity, ShieldAlert, Target, BarChart2 } from "lucide-react";
+import { formatUSD } from "@/lib/formatters";
 
 export function MetricCards({ summary }: { summary: any }) {
   if (!summary) return null;
@@ -9,13 +10,7 @@ export function MetricCards({ summary }: { summary: any }) {
     profitFactor, maxDrawdownPct, avgRiskReward, sharpeRatio
   } = summary;
 
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(val).replace('IDR', 'Rp');
-  };
+
 
   const isReturnPos = totalReturnPct >= 0;
 
@@ -33,7 +28,7 @@ export function MetricCards({ summary }: { summary: any }) {
         </div>
         <div className="text-sm mt-3 text-gray-400">Since inception ({startDate})</div>
         <div className={`text-sm font-bold font-mono mt-1 ${isReturnPos ? 'text-[#00D4AA]/70' : 'text-[#FF4757]/70'}`}>
-          {isReturnPos ? '+' : ''}{formatIDR(totalReturnIDR)}
+          {isReturnPos ? '+' : ''}{formatUSD(totalReturnIDR)}
         </div>
       </div>
 

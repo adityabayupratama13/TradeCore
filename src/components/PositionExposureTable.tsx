@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useRiskStatus } from "@/hooks/useRiskStatus";
+import { formatUSD, formatPnL } from "@/lib/formatters";
 
 export function PositionExposureTable() {
   const [data, setData] = useState<any>(null);
@@ -18,9 +19,7 @@ export function PositionExposureTable() {
       });
   }, []);
 
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val).replace('IDR', 'Rp');
-  };
+
 
   if (loading) return <div className="h-96 animate-pulse bg-[#0E1628] rounded-xl" />;
 
@@ -51,10 +50,10 @@ export function PositionExposureTable() {
                 <th className="p-4">Symbol</th>
                 <th className="p-4 text-center">Direction</th>
                 <th className="p-4 text-right">Entry Price</th>
-                <th className="p-4 text-right">Size (IDR)</th>
+                <th className="p-4 text-right">Size (USD)</th>
                 <th className="p-4 text-right">Size % Cap</th>
                 <th className="p-4 text-center">Lev</th>
-                <th className="p-4 text-right">Risk (IDR)</th>
+                <th className="p-4 text-right">Risk (USD)</th>
                 <th className="p-4 text-right">Risk % Cap</th>
               </tr>
             </thead>
@@ -78,7 +77,7 @@ export function PositionExposureTable() {
                     </td>
                     <td className="p-4 text-right font-mono text-gray-300">{p.entryPrice.toLocaleString()}</td>
                     <td className="p-4 text-right font-mono text-white">
-                      {formatIDR((p.entryPrice * p.quantity) / (p.leverage || 1))}
+                      {formatUSD((p.entryPrice * p.quantity) / (p.leverage || 1))}
                     </td>
                     <td className="p-4 text-right font-mono font-bold">
                        <span className={`${
@@ -91,7 +90,7 @@ export function PositionExposureTable() {
                       {p.marketType === 'CRYPTO_FUTURES' ? `${p.leverage}×` : '—'}
                     </td>
                     <td className="p-4 text-right font-mono text-gray-300">
-                      {p.riskAmount > 0 ? formatIDR(p.riskAmount) : '—'}
+                      {p.riskAmount > 0 ? formatUSD(p.riskAmount) : '—'}
                     </td>
                     <td className="p-4 text-right font-mono font-bold">
                       <span className={`${
@@ -107,7 +106,7 @@ export function PositionExposureTable() {
             <tfoot className="bg-[#0A0E1A]/80 border-t-2 border-[#1a2540]">
               <tr>
                 <td colSpan={3} className="p-4 font-bold text-gray-400 uppercase tracking-widest text-xs">Total Open Exposure</td>
-                <td className="p-4 text-right font-mono font-bold text-white text-lg">{formatIDR(totalExposureIDR)}</td>
+                <td className="p-4 text-right font-mono font-bold text-white text-lg">{formatUSD(totalExposureIDR)}</td>
                 <td className="p-4 text-right font-mono font-bold text-lg text-[#3d7fff]">{totalExposurePct.toFixed(1)}%</td>
                 <td colSpan={3}></td>
               </tr>

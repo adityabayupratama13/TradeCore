@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Clock, Download, Search, Filter } from "lucide-react";
 import { format } from "date-fns";
+import { formatUSD, formatPnL } from "@/lib/formatters";
 
 export default function HistoryPage() {
   const [trades, setTrades] = useState<any[]>([]);
@@ -16,14 +17,6 @@ export default function HistoryPage() {
       })
       .finally(() => setLoading(false));
   }, []);
-
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(val).replace('IDR', 'Rp');
-  };
 
   return (
     <div className="space-y-6 w-full max-w-[1600px] mx-auto pb-10">
@@ -113,7 +106,7 @@ export default function HistoryPage() {
                          )}
                       </td>
                       <td className={`p-4 text-right font-mono font-bold ${isWin ? 'text-[#00D4AA]' : isLoss ? 'text-[#FF4757]' : 'text-gray-400'}`}>
-                         {t.status === 'CLOSED' ? (t.pnl >= 0 ? '+' : '') + formatIDR(t.pnl * 16000) : '—'}
+                         {t.status === 'CLOSED' ? formatPnL(t.pnl || 0) : '—'}
                       </td>
                       <td className={`p-4 text-right font-mono font-bold ${isWin ? 'text-[#00D4AA]' : isLoss ? 'text-[#FF4757]' : 'text-gray-400'}`}>
                          {t.status === 'CLOSED' && t.pnlPct !== null ? (t.pnlPct > 0 ? '+' : '') + t.pnlPct.toFixed(2) + '%' : '—'}

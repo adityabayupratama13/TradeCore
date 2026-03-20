@@ -7,6 +7,7 @@ import { usePerformanceData } from "@/hooks/usePerformanceData";
 import { MetricCards } from "@/components/MetricCards";
 import { PnlHeatmap } from "@/components/PnlHeatmap";
 import { DonutChart } from "@/components/DonutChart";
+import { formatUSD, formatPnL } from "@/lib/formatters";
 
 // Lightweight-Charts requires browser window object, must dynamically import with no SSR
 const EquityChartComponent = dynamic(() => import("@/components/EquityChart"), {
@@ -49,14 +50,6 @@ export default function PerformancePage() {
       </div>
     );
   }
-
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(val).replace('IDR', 'Rp');
-  };
 
   const { byCrypto, byIDX, bestTrade, worstTrade, bestMonth, worstMonth, avgTradesPerWeek, mostActiveDay, mostActiveHour, totalTradingDays } = breakdown;
   
@@ -123,28 +116,28 @@ export default function PerformancePage() {
                 <div className="flex items-center gap-2"><span className="text-lg">🏆</span> <span className="text-xs font-bold text-gray-300">Best Trade</span></div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-[#00D4AA]">{bestTrade?.symbol || 'N/A'}</div>
-                  <div className="text-xs font-mono text-[#00D4AA]/70">+{formatIDR(bestTrade?.pnl || 0)}</div>
+                  <div className="text-xs font-mono text-[#00D4AA]/70">{formatPnL(bestTrade?.pnl || 0)}</div>
                 </div>
               </div>
               <div className="flex justify-between p-3 bg-red-500/5 rounded border border-red-500/10">
                 <div className="flex items-center gap-2"><span className="text-lg">💀</span> <span className="text-xs font-bold text-white">Worst Trade</span></div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-[#FF4757]">{worstTrade?.symbol || 'N/A'}</div>
-                  <div className="text-xs font-mono text-[#FF4757]/70">{formatIDR(worstTrade?.pnl || 0)}</div>
+                  <div className="text-xs font-mono text-[#FF4757]/70">{formatPnL(worstTrade?.pnl || 0)}</div>
                 </div>
               </div>
               <div className="flex justify-between p-3 bg-white/5 rounded">
                 <div className="flex items-center gap-2"><span className="text-lg">🔥</span> <span className="text-xs font-bold text-gray-300">Best Month</span></div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-[#00D4AA]">{bestMonth.month}</div>
-                  <div className="text-xs font-mono text-[#00D4AA]/70">+{formatIDR(bestMonth.pnl)}</div>
+                  <div className="text-xs font-mono text-[#00D4AA]/70">{formatPnL(bestMonth.pnl || 0)}</div>
                 </div>
               </div>
               <div className="flex justify-between p-3 bg-white/5 rounded">
                 <div className="flex items-center gap-2"><span className="text-lg">❄️</span> <span className="text-xs font-bold text-gray-300">Worst Month</span></div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-[#FF4757]">{worstMonth.month}</div>
-                  <div className="text-xs font-mono text-[#FF4757]/70">{formatIDR(worstMonth.pnl)}</div>
+                  <div className="text-xs font-mono text-[#FF4757]/70">{formatPnL(worstMonth.pnl || 0)}</div>
                 </div>
               </div>
             </div>
@@ -171,10 +164,10 @@ export default function PerformancePage() {
               {[
                 { label: 'Total Trades', k: 'totalTrades', unit: '' },
                 { label: 'Win Rate', k: 'winRate', unit: '%' },
-                { label: 'Avg Win', k: 'avgWin', unit: 'IDR' },
-                { label: 'Avg Loss', k: 'avgLoss', unit: 'IDR' },
-                { label: 'Largest Win', k: 'largestWin', unit: 'IDR' },
-                { label: 'Largest Loss', k: 'largestLoss', unit: 'IDR' },
+                { label: 'Avg Win', k: 'avgWin', unit: 'USD' },
+                { label: 'Avg Loss', k: 'avgLoss', unit: 'USD' },
+                { label: 'Largest Win', k: 'largestWin', unit: 'USD' },
+                { label: 'Largest Loss', k: 'largestLoss', unit: 'USD' },
                 { label: 'Avg Hold Time', k: 'holdTimeStr', unit: '' },
                 { label: 'Profit Factor', k: 'profitFactor', unit: '' }
               ].map((row, i) => {
@@ -183,7 +176,7 @@ export default function PerformancePage() {
                 const formatVal = (section: any) => {
                   const val = section[row.k];
                   if (row.unit === '%') return `${typeof val === 'number' ? val.toFixed(1) : val}%`;
-                  if (row.unit === 'IDR') return formatIDR(val);
+                  if (row.unit === 'USD') return formatPnL(val || 0);
                   if (row.k === 'profitFactor') return typeof val === 'number' ? val.toFixed(2) : val;
                   return val;
                 };

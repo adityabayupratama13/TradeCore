@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { formatUSD } from "@/lib/formatters";
 
 export function RiskHistoryLog() {
   const [events, setEvents] = useState<any[]>([]);
@@ -43,9 +44,7 @@ export function RiskHistoryLog() {
     }
   };
 
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val).replace('IDR', 'Rp');
-  };
+
 
   return (
     <div className="bg-[#0E1628] border border-[#1a2540] rounded-xl flex flex-col mt-6 overflow-hidden">
@@ -100,7 +99,7 @@ export function RiskHistoryLog() {
                     {e.description}
                   </td>
                   <td className="p-4 text-right font-mono font-bold text-gray-400">
-                    {formatIDR(e.capitalAtEvent)}
+                    {formatUSD(e.capitalAtEvent)}
                   </td>
                 </tr>
               ))

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { formatUSD, formatPnL } from '@/lib/formatters';
 import { useEffect, useState } from "react";
 import { getModeConfig } from "@/lib/tradingModes";
 
@@ -66,15 +67,6 @@ export function TopBar() {
     }).catch(console.error);
   }, []);
 
-  // Format currency
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(val);
-  };
 
   const getPageTitle = (path: string) => {
     if (path === "/") return "Dashboard";
@@ -103,7 +95,7 @@ export function TopBar() {
         {/* Total Capital */}
         <div className="flex flex-col text-right">
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Total Capital</span>
-          <span className="text-sm font-mono text-white font-medium">{formatIDR(statusData.totalCapital)}</span>
+          <span className="text-sm font-mono text-white font-medium">{formatUSD(statusData.totalCapital)}</span>
         </div>
 
         <div className="w-[1px] h-8 bg-[#1a2540]" />
@@ -112,7 +104,7 @@ export function TopBar() {
         <div className="flex flex-col text-right">
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Today P&L</span>
           <span className={`text-sm font-mono font-medium ${statusData.dailyPnl >= 0 ? "text-[#00D4AA]" : "text-[#FF4757]"}`}>
-            {statusData.dailyPnl >= 0 ? "+" : "-"}{Math.abs(statusData.dailyPnlPct).toFixed(2)}%
+             {formatPnL(statusData.dailyPnl)}
           </span>
         </div>
 

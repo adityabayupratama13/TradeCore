@@ -113,7 +113,7 @@ export async function syncPositions(): Promise<void> {
                 type: 'TRADE_CLOSE',
                 data: {
                     symbol: trade.symbol, direction: trade.direction,
-                    exitPrice: exitPrice, pnl: Math.round((trade.pnl || 0) * 16000), // Assuming 16000 is a conversion factor
+                    exitPrice: exitPrice, pnl: trade.pnl || 0,
                     pnlPct: (trade.pnlPct || 0).toFixed(2),
                     reason: 'Closed on Binance'
                 }

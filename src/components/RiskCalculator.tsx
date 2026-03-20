@@ -6,6 +6,7 @@ import {
   calculateMarginRequired 
 } from "@/lib/calculations";
 import { CheckCircle2, XCircle } from "lucide-react";
+import { formatUSD, formatPnL } from "@/lib/formatters";
 
 interface RiskCalculatorProps {
   marketType: 'CRYPTO_FUTURES' | 'SAHAM_IDX';
@@ -35,7 +36,7 @@ export function RiskCalculator(props: RiskCalculatorProps) {
 
   // Overview calculations
   const positionSize = calculatePositionSize(safeEntry, safeQty);
-  const capitalUsdt = totalCapital / 16000;
+  const capitalUsdt = totalCapital;
   const positionPct = capitalUsdt > 0 ? (positionSize / capitalUsdt) * 100 : 0;
   const marginRequired = isCrypto ? calculateMarginRequired(positionSize, leverage) : positionSize;
 
@@ -55,15 +56,6 @@ export function RiskCalculator(props: RiskCalculatorProps) {
   const posCheckPass = positionPct <= 20;
   const levCheckPass = !isCrypto || leverage <= maxLeverage;
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: isCrypto ? 'USD' : 'IDR',
-      minimumFractionDigits: isCrypto ? 2 : 0,
-      maximumFractionDigits: isCrypto ? 2 : 0
-    }).format(val).replace('IDR', 'Rp').replace('USD', '$');
-  };
-
   return (
     <div className="space-y-4">
       
@@ -73,7 +65,7 @@ export function RiskCalculator(props: RiskCalculatorProps) {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-400">Position Size</span>
-            <span className="font-mono text-white">{formatCurrency(positionSize)}</span>
+            <span className="font-mono text-white">{formatUSD(positionSize)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Size % of Capital</span>
@@ -84,7 +76,7 @@ export function RiskCalculator(props: RiskCalculatorProps) {
           {isCrypto && (
             <div className="flex justify-between">
               <span className="text-gray-400">Margin Required</span>
-              <span className="font-mono text-white">{formatCurrency(marginRequired)}</span>
+              <span className="font-mono text-white">{formatUSD(marginRequired)}</span>
             </div>
           )}
         </div>
@@ -96,7 +88,7 @@ export function RiskCalculator(props: RiskCalculatorProps) {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-400">Risk Amount</span>
-            <span className="font-mono text-[#FF4757]">{formatCurrency(riskAmount)}</span>
+            <span className="font-mono text-[#FF4757]">{formatUSD(riskAmount)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Risk % (Capital)</span>
@@ -106,7 +98,7 @@ export function RiskCalculator(props: RiskCalculatorProps) {
           </div>
           <div className="flex justify-between pt-2 border-t border-[#1a2540]">
             <span className="text-gray-400">Potential Profit</span>
-            <span className="font-mono text-[#00D4AA]">{formatCurrency(profitAmount)}</span>
+            <span className="font-mono text-[#00D4AA]">{formatUSD(profitAmount)}</span>
           </div>
           <div className="flex justify-between items-center mt-2">
             <span className="text-gray-400">R/R Ratio</span>
@@ -131,7 +123,7 @@ export function RiskCalculator(props: RiskCalculatorProps) {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Est. Taker Fee</span>
-              <span className="font-mono text-gray-300">{formatCurrency(estFees)}</span>
+              <span className="font-mono text-gray-300">{formatUSD(estFees)}</span>
             </div>
           </div>
         </div>

@@ -53,7 +53,7 @@ export async function manageOpenPositions() {
               type: 'PARTIAL_TP',
               data: {
                  symbol: trade.symbol,
-                 partialPnl: Math.round((profitRaw * (trade.quantity / 2)) * 16000), 
+                 partialPnl: profitRaw * (trade.quantity / 2), 
                  partialPct: profitPct.toFixed(2),
                  takeProfit: takeProfitSafe
               }
@@ -140,7 +140,7 @@ export async function manageOpenPositions() {
              await closePosition(trade.symbol, trade.quantity);
              await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnlPct: profitPct } });
              await checkAndEnforceCircuitBreaker();
-             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'Max hold 8h reached', pnl: Math.round(profitRaw * trade.quantity * 16000), pnlPct: profitPct.toFixed(2), holdDuration: '8h' }});
+             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'Max hold 8h reached', pnl: profitRaw * trade.quantity, pnlPct: profitPct.toFixed(2), holdDuration: '8h' }});
              continue;
          } else {
              await logEngine({ symbol: trade.symbol, action: 'MAX_HOLD', result: 'IGNORED', reason: 'In loss, letting SL work naturally' });
@@ -154,7 +154,7 @@ export async function manageOpenPositions() {
              await closePosition(trade.symbol, trade.quantity);
              await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnlPct: profitPct } });
              await checkAndEnforceCircuitBreaker();
-             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'NY session closing', pnl: Math.round(profitRaw * trade.quantity * 16000), pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
+             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'NY session closing', pnl: profitRaw * trade.quantity, pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
              continue;
          }
       }
@@ -213,7 +213,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     if (portfolio && totalWalletBalance > 0) {
         await prisma.portfolio.update({
             where: { id: portfolio.id },
-            data: { totalCapital: totalWalletBalance * 16000 }
+            data: { totalCapital: totalWalletBalance }
         });
     }
 

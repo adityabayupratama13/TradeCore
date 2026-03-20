@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowUpRight, ArrowDownRight, Activity, Percent, Crosshair, AlertTriangle } from "lucide-react";
+import { formatUSD, formatPnL } from '@/lib/formatters';
 
 export default function DashboardHome() {
   const [data, setData] = useState({
@@ -25,13 +26,7 @@ export default function DashboardHome() {
     });
   }, []);
 
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(val || 0);
-  };
+
 
   if (loading) {
     return <div className="animate-pulse space-y-6">Loading dashboard...</div>;
@@ -48,7 +43,7 @@ export default function DashboardHome() {
         <div className="bg-[#0E1628] border border-[#1a2540] rounded-lg p-5 hover:border-[#1a2540]/80 transition-colors">
           <div className="text-gray-400 text-sm font-medium mb-2 uppercase tracking-wider">Total Portfolio Value</div>
           <div className="text-3xl font-mono text-white mt-1">
-            {formatIDR(portfolio?.totalCapital || 0)}
+            {formatUSD(portfolio?.totalCapital || 0)}
           </div>
         </div>
 
@@ -57,7 +52,7 @@ export default function DashboardHome() {
           <div className="text-gray-400 text-sm font-medium mb-2 uppercase tracking-wider">Today's P&L</div>
           <div className="flex items-end gap-3 mt-1">
             <div className={`text-3xl font-mono ${performance?.dailyPnl >= 0 ? "text-[#00D4AA]" : "text-[#FF4757]"}`}>
-              {performance?.dailyPnl >= 0 ? "+" : ""}{formatIDR(performance?.dailyPnl || 0)}
+              {formatPnL(performance?.dailyPnl || 0)}
             </div>
             <div className={`px-2 py-1 rounded text-xs font-bold mb-1 ${performance?.dailyPnl >= 0 ? "bg-[#00D4AA]/10 text-[#00D4AA]" : "bg-[#FF4757]/10 text-[#FF4757]"}`}>
               {performance?.dailyPnl >= 0 ? <ArrowUpRight className="w-3 h-3 inline mr-0.5" /> : <ArrowDownRight className="w-3 h-3 inline mr-0.5" />}
@@ -125,7 +120,7 @@ export default function DashboardHome() {
                     </td>
                     <td className="px-5 py-3">{trade.entryPrice}</td>
                     <td className={`px-5 py-3 ${trade.pnl > 0 ? 'text-[#00D4AA]' : trade.pnl < 0 ? 'text-[#FF4757]' : 'text-gray-400'}`}>
-                      {trade.pnl > 0 ? '+' : ''}{formatIDR(trade.pnl || 0)}
+                      {trade.pnl ? formatPnL(trade.pnl) : '—'}
                     </td>
                     <td className="px-5 py-3">
                       <span className="text-xs font-sans text-gray-400">{trade.status}</span>

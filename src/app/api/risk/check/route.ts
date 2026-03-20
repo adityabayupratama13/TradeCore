@@ -37,7 +37,7 @@ export async function GET() {
     });
 
     const dailyPnl = todayTrades.reduce((sum: number, trade: any) => sum + (trade.pnl || 0), 0);
-    const capitalUsdt = portfolio.totalCapital / 16000;
+    const capitalUsdt = portfolio.totalCapital;
     const dailyLossPct = dailyPnl < 0 ? (Math.abs(dailyPnl) / capitalUsdt) * 100 : 0;
 
     // Check if we need to auto-lock now

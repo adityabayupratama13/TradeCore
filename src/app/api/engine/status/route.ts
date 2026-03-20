@@ -76,7 +76,7 @@ export async function GET() {
     const todayTrades = await prisma.trade.findMany({ where: { entryAt: { gte: startOfDay } } });
     
     const portfolio = await prisma.portfolio.findFirst();
-    const capitalUsdt = (portfolio?.totalCapital || 16000) / 16000;
+    const capitalUsdt = portfolio?.totalCapital || 0;
     
     let wins = 0, losses = 0, sumUsdt = 0, bestTrade = 0;
     

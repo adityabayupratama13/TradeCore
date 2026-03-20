@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, AreaSeries } from "lightweight-charts";
+import { formatUSD } from "@/lib/formatters";
 
 export function EquityChartComponent({ data }: { data: { time: string, value: number }[] }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -110,13 +111,7 @@ export function EquityChartComponent({ data }: { data: { time: string, value: nu
 
   const drawdownPct = peak > 0 ? ((peak - currentVal) / peak) * 100 : 0;
 
-  const formatIDR = (val: number) => {
-    return new Intl.NumberFormat('en-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(val).replace('IDR', 'Rp');
-  };
+
 
   return (
     <div className="bg-[#0E1628] border border-[#1a2540] rounded-xl p-5 flex flex-col items-center">
@@ -139,7 +134,7 @@ export function EquityChartComponent({ data }: { data: { time: string, value: nu
       <div className="w-full flex gap-4 mt-6 pt-4 border-t border-[#1a2540]">
         <div className="bg-[#0A0E1A] border border-[#1a2540] px-4 py-2 rounded flex-1">
           <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block">Peak Capital</span>
-          <span className="text-lg font-mono font-bold text-white">{formatIDR(peak)}</span>
+          <span className="text-lg font-mono font-bold text-white">{formatUSD(peak)}</span>
           <span className="text-xs text-gray-400 ml-2">({peakDate})</span>
         </div>
         <div className="bg-[#0A0E1A] border border-[#1a2540] px-4 py-2 rounded flex-1">

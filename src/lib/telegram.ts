@@ -35,10 +35,10 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
         text = '✅ TradeCore connected. Risk alerts active.';
         break;
       case 'LOCK':
-        text = `🔒 TRADECORE — TRADING LOCKED\nCapital: IDR ${d.capital}\nReason: Daily loss limit ${d.limit}% reached\nCurrent loss: -${d.lossPct}%\nUnlocks: ${d.unlockTime} WIB\n→ Review your journal now.`;
+        text = `🔒 TRADECORE — TRADING LOCKED\nCapital: USD ${d.capital}\nReason: Daily loss limit ${d.limit}% reached\nCurrent loss: -${d.lossPct}%\nUnlocks: ${d.unlockTime} WIB\n→ Review your journal now.`;
         break;
       case 'WARNING':
-        text = `⚠️ TRADECORE — RISK WARNING\n${d.warningType} at ${d.currentPct}% of ${d.limitPct}% limit\nRemaining: IDR ${d.remaining}\nBe careful with next trades.`;
+        text = `⚠️ TRADECORE — RISK WARNING\n${d.warningType} at ${d.currentPct}% of ${d.limitPct}% limit\nRemaining: USD ${d.remaining}\nBe careful with next trades.`;
         break;
       case 'TRIGGER_FIRED':
         text = `⚡ TRIGGER DETECTED\n${d.symbol} — ${d.triggerType}\nStrength: ${'⭐'.repeat(d.strength)}/3\n🤖 AI analyzing now...`;
@@ -53,19 +53,19 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
         text = `🛡️ BREAKEVEN SECURED\n${d.symbol} ${d.direction}\nSL moved to entry price\nDownside: ZERO | TP still: ${d.takeProfit}\nCurrent profit: +${d.currentPnl}%`;
         break;
       case 'PARTIAL_TP':
-        text = `💰 PARTIAL PROFIT LOCKED\n${d.symbol} — 50% position closed\nProfit taken: +${d.partialPnl} IDR (+${d.partialPct}%)\nRemaining 50% → running to TP: ${d.takeProfit}`;
+        text = `💰 PARTIAL PROFIT LOCKED\n${d.symbol} — 50% position closed\nProfit taken: +${d.partialPnl} USD (+${d.partialPct}%)\nRemaining 50% → running to TP: ${d.takeProfit}`;
         break;
       case 'SESSION_CLOSE':
-        text = `⏰ SESSION CLOSE — SECURED\n${d.symbol} ${d.direction} closed\nReason: ${d.reason}\nP&L: ${d.pnl >= 0 ? '+' : ''}${d.pnl} IDR (${d.pnlPct}%)\nDuration: ${d.holdDuration}`;
+        text = `⏰ SESSION CLOSE — SECURED\n${d.symbol} ${d.direction} closed\nReason: ${d.reason}\nP&L: ${d.pnl >= 0 ? '+' : ''}${d.pnl} USD (${d.pnlPct}%)\nDuration: ${d.holdDuration}`;
         break;
       case 'TRADE_OPEN':
-        text = `📈 TRADE OPENED\n${d.direction} ${d.symbol} @ ${d.entryPrice || d.price}\nSize: ${d.size} | Lev: ${d.leverage}x\nSL: ${d.sl || d.stopLoss} | TP: ${d.tp || d.takeProfit}\nR/R: 1:${d.rr || d.riskReward}\nEst. profit if TP: +${d.estProfit} IDR\nEst. loss if SL: -${d.estLoss} IDR`;
+        text = `📈 TRADE OPENED\n${d.direction} ${d.symbol} @ ${d.entryPrice || d.price}\nSize: ${d.size} | Lev: ${d.leverage}x\nSL: ${d.sl || d.stopLoss} | TP: ${d.tp || d.takeProfit}\nR/R: 1:${d.rr || d.riskReward}\nEst. profit if TP: +${d.estProfit} USD\nEst. loss if SL: -${d.estLoss} USD`;
         break;
       case 'TRADE_CLOSE':
-        text = `${d.pnl >= 0 ? '✅' : '❌'} TRADE CLOSED\n${d.direction} ${d.symbol}\nEntry: ${d.entry || d.entryPrice} → Exit: ${d.exit || d.exitPrice}\nP&L: ${d.pnl >= 0 ? '+' : ''}${d.pnl} IDR (${d.pnlPct}%)\nDuration: ${d.holdDuration}\nReason: ${d.closeReason || d.reason}`;
+        text = `${d.pnl >= 0 ? '✅' : '❌'} TRADE CLOSED\n${d.direction} ${d.symbol}\nEntry: ${d.entry || d.entryPrice} → Exit: ${d.exit || d.exitPrice}\nP&L: ${d.pnl >= 0 ? '+' : ''}${d.pnl} USD (${d.pnlPct}%)\nDuration: ${d.holdDuration}\nReason: ${d.closeReason || d.reason}`;
         break;
       case 'DAILY_SUMMARY':
-        text = `📊 DAILY SUMMARY — ${d.dateWIB || d.date}\n━━━━━━━━━━━━━━\nTrades: ${d.totalTrades || d.total} (${d.wins}W / ${d.losses}L)\nWin Rate: ${d.winRate}%\nNet P&L: ${d.netPnl >= 0 ? '+' : ''}${d.netPnl} IDR (${d.netPct || d.pnlPct}%)\nBest: +${d.bestTrade} IDR | Worst: ${d.worstTrade} IDR\nDrawdown: ${d.drawdown}%\n━━━━━━━━━━━━━━\nStatus: ${d.statusEmoji} ${d.status}\nCapital: Rp ${d.totalCapital || d.capital}`;
+        text = `📊 DAILY SUMMARY — ${d.dateWIB || d.date}\n━━━━━━━━━━━━━━\nTrades: ${d.totalTrades || d.total} (${d.wins}W / ${d.losses}L)\nWin Rate: ${d.winRate}%\nNet P&L: ${d.netPnl >= 0 ? '+' : ''}${d.netPnl} USD (${d.netPct || d.pnlPct}%)\nBest: +${d.bestTrade} USD | Worst: ${d.worstTrade} USD\nDrawdown: ${d.drawdown}%\n━━━━━━━━━━━━━━\nStatus: ${d.statusEmoji} ${d.status}\nCapital: $${d.totalCapital || d.capital}`;
         break;
       case 'PAIRS_UPDATED':
         text = `🦅 DYNAMIC HUNTER — HOURLY UPDATE\n━━━━━━━━━━━━━━━━━━━\n⚡ ACTIVE PAIRS:\n${d.activePairs.map((p: any, i: number) => 

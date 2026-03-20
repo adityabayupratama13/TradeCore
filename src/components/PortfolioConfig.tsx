@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Save, AlertTriangle, RefreshCw, Trash2, ShieldAlert } from "lucide-react";
+import { formatUSD } from "@/lib/formatters";
 
 export function PortfolioConfig() {
   const [data, setData] = useState({ name: '', startingCapital: 0, activeCapitalPct: 80 });
@@ -76,7 +77,7 @@ export function PortfolioConfig() {
             />
           </div>
           <div>
-            <label className="text-sm font-bold text-gray-400 mb-2 block">Starting Capital (IDR)</label>
+            <label className="text-sm font-bold text-gray-400 mb-2 block">Starting Capital (USD)</label>
             <input 
               type="number" value={data.startingCapital} onChange={e => setData({...data, startingCapital: parseFloat(e.target.value)})}
               className="w-full bg-[#0A0E1A] border border-[#1a2540] rounded px-4 py-2.5 text-white font-mono focus:border-[#3d7fff] outline-none"
@@ -85,13 +86,13 @@ export function PortfolioConfig() {
           <div>
             <label className="text-sm font-bold text-gray-400 mb-2 block">Current Total Capital</label>
             <div className="w-full bg-[#0A0E1A]/50 border border-[#1a2540]/50 rounded px-4 py-2.5 text-gray-400 font-mono cursor-not-allowed">
-              IDR {currentCapital.toLocaleString()}
+              {formatUSD(currentCapital)}
             </div>
           </div>
           <div>
             <label className="text-sm font-bold text-gray-400 mb-2 block">Base Currency</label>
             <div className="w-full bg-[#0A0E1A]/50 border border-[#1a2540]/50 rounded px-4 py-2.5 text-gray-400 font-bold cursor-not-allowed">
-              IDR (Indonesian Rupiah)
+              USD (US Dollar)
             </div>
           </div>
         </div>

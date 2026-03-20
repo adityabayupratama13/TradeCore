@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { formatPnL } from "@/lib/formatters";
 
 interface JournalDetailModalProps {
   entry: any; // tradeJournal join trade
@@ -11,14 +12,7 @@ export function JournalDetailModal({ entry, onClose }: JournalDetailModalProps) 
   const t = entry.trade;
   const isCrypto = t?.marketType === 'CRYPTO_FUTURES';
   
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: isCrypto ? 'USD' : 'IDR',
-      minimumFractionDigits: isCrypto ? 2 : 0,
-      maximumFractionDigits: isCrypto ? 2 : 0
-    }).format(val).replace('IDR', 'Rp').replace('USD', '$');
-  };
+
 
   // Pure CSS P&L Bar Visualization
   // Showing entry vs exit scaled.
@@ -111,7 +105,7 @@ export function JournalDetailModal({ entry, onClose }: JournalDetailModalProps) 
             <div className="text-right">
               <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Realized P&L</div>
               <div className={`text-4xl font-mono font-bold ${(t?.pnl || 0) >= 0 ? 'text-[#00D4AA]' : 'text-[#FF4757]'}`}>
-                {(t?.pnl || 0) >= 0 ? '+' : ''}{formatCurrency(t?.pnl || 0)}
+                {formatPnL(t?.pnl || 0)}
               </div>
             </div>
           </div>

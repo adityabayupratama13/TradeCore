@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Layers, X } from "lucide-react";
 import { useBinanceWebSocket } from "@/hooks/useBinanceWebSocket";
+import { formatUSD, formatPnL } from "@/lib/formatters";
 
 export default function PositionsPage() {
   const [trades, setTrades] = useState<any[]>([]);
@@ -38,14 +39,7 @@ export default function PositionsPage() {
   const uniqueCryptoSymbols = Array.from(new Set(cryptoSymbols));
   const { data: wsData } = useBinanceWebSocket(uniqueCryptoSymbols);
 
-  const formatCurrency = (val: number, isCrypto: boolean) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: isCrypto ? 'USD' : 'IDR',
-      minimumFractionDigits: isCrypto ? 2 : 0,
-      maximumFractionDigits: isCrypto ? 2 : 0
-    }).format(val).replace('IDR', 'Rp').replace('USD', '$');
-  };
+
 
   return (
     <div className="space-y-6">
@@ -105,21 +99,21 @@ export default function PositionsPage() {
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Entry / Qty</span>
-                      <span className="text-white font-mono">{formatCurrency(trade.entryPrice, isCrypto)} • {trade.quantity}</span>
+                      <span className="text-white font-mono">{formatUSD(trade.entryPrice)} • {trade.quantity}</span>
                     </div>
                     {isCrypto && (
                       <>
                         <div className="flex justify-between text-sm mt-1">
                           <span className="text-gray-400">SL</span>
                           <span className="text-white font-mono flex items-center gap-1">
-                             {trade.stopLoss ? formatCurrency(trade.stopLoss, isCrypto) : 'N/A'} 
+                             {trade.stopLoss ? formatUSD(trade.stopLoss) : 'N/A'} 
                              {trade.slAlgoId ? <span className="text-[#00D4AA] text-xs">✅ (Algo #{trade.slAlgoId} ACTIVE)</span> : <span className="text-[#FF4757] text-xs">⚠️ (UNPROTECTED)</span>}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm mt-1 border-b border-[#1a2540] pb-2">
                           <span className="text-gray-400">TP</span>
                           <span className="text-white font-mono flex items-center gap-1">
-                             {trade.takeProfit ? formatCurrency(trade.takeProfit, isCrypto) : 'N/A'} 
+                             {trade.takeProfit ? formatUSD(trade.takeProfit) : 'N/A'} 
                              {trade.tpAlgoId ? <span className="text-[#00D4AA] text-xs">✅ (Algo #{trade.tpAlgoId} ACTIVE)</span> : <span className="text-[#FF4757] text-xs">⚠️ (UNPROTECTED)</span>}
                           </span>
                         </div>
@@ -129,7 +123,7 @@ export default function PositionsPage() {
                       <div className="flex justify-between text-sm pt-2 border-t border-[#1a2540]">
                         <span className="text-gray-400">Live P&L</span>
                         <span className={`font-mono font-bold ${livePnl >= 0 ? 'text-[#00D4AA]' : 'text-[#FF4757]'}`}>
-                          {livePnl >= 0 ? '+' : ''}{formatCurrency(livePnl, isCrypto)}
+                          {formatPnL(livePnl)}
                         </span>
                       </div>
                     )}
