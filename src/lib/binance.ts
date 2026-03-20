@@ -30,14 +30,17 @@ export async function getSymbolPrecision(symbol: string): Promise<SymbolPrecisio
       for (const s of res.symbols) {
         const priceFilter = s.filters.find((f: any) => f.filterType === 'PRICE_FILTER');
         const lotSize = s.filters.find((f: any) => f.filterType === 'LOT_SIZE');
+        const marketLotSize = s.filters.find((f: any) => f.filterType === 'MARKET_LOT_SIZE');
         const minNotional = s.filters.find((f: any) => f.filterType === 'MIN_NOTIONAL');
+
+        const calculatedMaxQty = marketLotSize ? parseFloat(marketLotSize.maxQty) : (lotSize ? parseFloat(lotSize.maxQty) : 0);
 
         symbolPrecisionCache.set(s.symbol, {
           symbol: s.symbol,
           pricePrecision: s.pricePrecision,
           quantityPrecision: s.quantityPrecision,
           minQty: lotSize ? parseFloat(lotSize.minQty) : 0,
-          maxQty: lotSize ? parseFloat(lotSize.maxQty) : 0,
+          maxQty: calculatedMaxQty,
           minNotional: minNotional ? parseFloat(minNotional.notional) : 0,
           tickSize: priceFilter ? parseFloat(priceFilter.tickSize) : 0,
           stepSize: lotSize ? parseFloat(lotSize.stepSize) : 0

@@ -113,7 +113,7 @@ export default function HistoryPage() {
                          )}
                       </td>
                       <td className={`p-4 text-right font-mono font-bold ${isWin ? 'text-[#00D4AA]' : isLoss ? 'text-[#FF4757]' : 'text-gray-400'}`}>
-                         {t.status === 'CLOSED' ? (t.pnl >= 0 ? '+' : '') + formatIDR(t.pnl) : '—'}
+                         {t.status === 'CLOSED' ? (t.pnl >= 0 ? '+' : '') + formatIDR(t.pnl * 16000) : '—'}
                       </td>
                       <td className={`p-4 text-right font-mono font-bold ${isWin ? 'text-[#00D4AA]' : isLoss ? 'text-[#FF4757]' : 'text-gray-400'}`}>
                          {t.status === 'CLOSED' && t.pnlPct !== null ? (t.pnlPct > 0 ? '+' : '') + t.pnlPct.toFixed(2) + '%' : '—'}

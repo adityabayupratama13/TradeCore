@@ -477,7 +477,7 @@ export async function calculatePositionSize(
   const riskAmount = totalCapital * (riskPct / 100);
 
   const rawSlDistance = Math.abs(entryPrice - stopLoss);
-  const effectiveSlDistance = rawSlDistance * 0.80; // 20% gap buffer
+  const effectiveSlDistance = rawSlDistance * 1.20; // 20% slippage gap buffer
 
   const positionValue = riskAmount / (effectiveSlDistance / entryPrice);
   const margin = positionValue / leverage;
@@ -537,8 +537,7 @@ export function enforceMinProfitTarget(
   const tpDistance = Math.abs(signal.entryPrice - signal.takeProfit);
   const tpDistancePct = tpDistance / signal.entryPrice;
   const potentialProfit = positionValue * tpDistancePct;
-  const capitalUsdt = totalCapital / 16000;
-  const profitAsPctOfCapital = (potentialProfit / capitalUsdt) * 100;
+  const profitAsPctOfCapital = (potentialProfit / totalCapital) * 100;
 
   console.log(`🎯 TP analysis:
     Potential profit: ${potentialProfit.toFixed(2)} USDT
@@ -546,7 +545,7 @@ export function enforceMinProfitTarget(
     Minimum target: ${minProfitTargetPct}%`);
 
   if (profitAsPctOfCapital < minProfitTargetPct) {
-    const requiredTpDistancePct = (capitalUsdt * minProfitTargetPct / 100) / positionValue;
+    const requiredTpDistancePct = (totalCapital * minProfitTargetPct / 100) / positionValue;
     const requiredTpDistance = signal.entryPrice * requiredTpDistancePct;
 
     if (signal.action === 'LONG') {

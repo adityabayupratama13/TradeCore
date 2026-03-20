@@ -75,16 +75,20 @@ export async function GET() {
 
     const todayTrades = await prisma.trade.findMany({ where: { entryAt: { gte: startOfDay } } });
     
-    let wins = 0, losses = 0, netPnl = 0, bestTrade = 0;
+    const portfolio = await prisma.portfolio.findFirst();
+    const capitalUsdt = (portfolio?.totalCapital || 16000) / 16000;
+    
+    let wins = 0, losses = 0, sumUsdt = 0, bestTrade = 0;
     
     todayTrades.forEach((t: any) => {
        if (t.status === 'CLOSED' && t.exitPrice) {
-          const p = t.pnlPct || ((t.direction === 'LONG' ? (t.exitPrice - t.entryPrice) : (t.entryPrice - t.exitPrice)) / t.entryPrice) * 100;
+          const p = t.pnlPct || ((t.direction === 'LONG' ? (t.exitPrice - t.entryPrice) : (t.entryPrice - t.exitPrice)) / t.entryPrice) * (t.leverage || 1) * 100;
           if (p >= 0) wins++; else losses++;
-          netPnl += p;
+          sumUsdt += (t.pnl || 0);
           if (p > bestTrade) bestTrade = p;
        }
     });
+    const netPnl = (sumUsdt / capitalUsdt) * 100;
 
     const bks = await prisma.engineLog.count({ where: { createdAt: { gte: startOfDay }, action: 'BREAKEVEN_MOVE' } });
     const pts = await prisma.engineLog.count({ where: { createdAt: { gte: startOfDay }, action: 'PARTIAL_TP' } });
