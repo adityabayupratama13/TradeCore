@@ -1,4 +1,4 @@
-import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice } from './binance';
+import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity } from './binance';
 import { SAFE_UNIVERSE } from './constants';
 import { analyzeMarket, calculateATR } from './aiEngine';
 import { syncPositions } from './positionSync';
@@ -481,11 +481,11 @@ export async function calculatePositionSize(
   const positionValue = riskAmount / (effectiveSlDistance / entryPrice);
   const margin = positionValue / leverage;
   const rawQuantity = positionValue / entryPrice;
-  // Apply binance scaling step sizes natively
-  const precision = await getSymbolPrecision(symbol).catch(() => ({ stepSize: 0.001 }));
-  const stepParts = precision.stepSize.toString().split('.');
-  const decimals = stepParts.length > 1 ? stepParts[1].length : 0;
-  const quantity = parseFloat((Math.floor(rawQuantity / precision.stepSize) * precision.stepSize).toFixed(decimals));
+  // Apply binance scaling step sizes natively handling maxQty bounds
+  const quantity = await roundQuantity(symbol, rawQuantity).catch(() => {
+    const fallbackStep = 0.001;
+    return parseFloat((Math.floor(rawQuantity / fallbackStep) * fallbackStep).toFixed(3));
+  });
 
   const liqDistance = entryPrice / leverage;
   const liqPrice = side === 'BUY'
