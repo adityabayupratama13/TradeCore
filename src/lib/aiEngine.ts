@@ -495,33 +495,17 @@ SESSION: ${tradingSession}
 RECENT TODAY: ${todaySummary}
 
 ABSOLUTE TREND RULE — NEVER VIOLATE:
-
-1H trend = EMA20 vs EMA50 on 1H chart:
-  BULLISH (EMA20 > EMA50) → ONLY accept LONG
-  BEARISH (EMA20 < EMA50) → ONLY accept SHORT
+Check EMA20 vs EMA50 on 1H chart:
+  If EMA20 > EMA50 (BULLISH): action must be LONG or SKIP
+  If EMA20 < EMA50 (BEARISH): action must be SHORT or SKIP
 
 If your signal direction conflicts with 1H trend:
-  → action: SKIP, no exceptions
+  Set action = SKIP immediately.
+  Do not look for exceptions.
+  Do not override this rule for any reason.
   
-ONLY exception — confirmed squeeze:
-  ALL of these must be true:
-  1. fundingCategory = EXTREME (not just HIGH)
-  2. OI rising > 3% in last hour
-  3. confidence >= 88 BEFORE any adjustment
-  4. Price at key support/resistance level
-  
-  If squeeze confirmed AND against trend:
-    → Reduce confidence by 20 points
-    → Only proceed if adjusted confidence >= 75
-
-IN PRACTICE:
-  BEARISH 1H + PREFER_LONG bias:
-    → Usually SKIP (trend wins over funding)
-    → Only LONG if squeeze score perfect
-
-  BULLISH 1H + PREFER_SHORT bias:
-    → Usually SKIP (trend wins over funding)
-    → Only SHORT if squeeze score perfect
+The phrase 'conflict but high conviction' does NOT exist.
+If there is a conflict → SKIP, period.
 
 ENTRY RULES:
 - Entry on 15m confirmation

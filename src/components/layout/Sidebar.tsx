@@ -14,7 +14,10 @@ import {
   Shield, 
   BarChart2, 
   Settings,
-  Zap
+  Zap,
+  ChevronLeft,
+  ChevronRight,
+  Menu
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -29,7 +32,13 @@ const NAV_ITEMS = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isCollapsed: boolean;
+  isMobileOpen: boolean;
+  toggle: () => void;
+}
+
+export function Sidebar({ isCollapsed, isMobileOpen, toggle }: SidebarProps) {
   const pathname = usePathname();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
@@ -42,15 +51,27 @@ export function Sidebar() {
   }, []);
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-[240px] bg-[#0E1628] border-r border-[#1a2540] flex flex-col z-20">
+    <div className={`fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out bg-[#0E1628] border-r border-[#1a2540] flex flex-col z-[110] transform ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} w-[var(--current-sidebar-width)] overflow-hidden`}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 h-16 border-b border-[#1a2540]">
-        <Hexagon className="w-6 h-6 text-[#00D4AA] fill-[#00D4AA]/20" />
-        <span className="font-bold text-white tracking-wider">TRADE CORE</span>
+      <div className={`flex items-center h-[var(--header-height)] border-b border-[#1a2540] transition-all whitespace-nowrap ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-6'}`}>
+        <Hexagon className="w-6 h-6 text-[#00D4AA] fill-[#00D4AA]/20 shrink-0" />
+        {!isCollapsed && <span className="font-bold text-white tracking-wider">TRADE CORE</span>}
+      </div>
+
+      {/* Toggle Button */}
+      <div className="flex border-b border-[#1a2540]">
+        <button 
+          onClick={toggle}
+          className={`w-full flex items-center p-3 text-gray-400 hover:text-white hover:bg-white/5 transition-colors ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {!isCollapsed && <span className="text-xs uppercase font-bold tracking-wider opacity-60">Menu</span>}
+          {isCollapsed ? <ChevronRight className="w-5 h-5 mx-auto" /> : <ChevronLeft className="w-5 h-5" />}
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto no-scrollbar">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -59,32 +80,44 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors ${
+              title={isCollapsed ? item.name : undefined}
+              className={`flex items-center gap-3 py-2.5 rounded-md transition-colors relative group ${
                 isActive 
                   ? "bg-[#00D4AA]/10 text-[#00D4AA]" 
                   : "text-gray-400 hover:text-white hover:bg-white/5"
-              }`}
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
             >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium text-sm">{item.name}</span>
+              <Icon className="w-5 h-5 shrink-0" />
+              {!isCollapsed && <span className="font-medium text-sm whitespace-nowrap">{item.name}</span>}
+              
+              {/* Tooltip on collapse hover */}
+              {isCollapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible whitespace-nowrap z-50 transition-all">
+                  {item.name}
+                </div>
+              )}
             </Link>
           );
         })}
       </nav>
 
       {/* Bottom Live Clock */}
-      <div className="p-4 border-t border-[#1a2540] mt-auto">
-        <div className="bg-[#0A0E1A] rounded-lg p-3 text-center border border-[#1a2540]">
+      <div className={`p-4 border-t border-[#1a2540] mt-auto transition-all ${isCollapsed ? 'px-2' : ''}`}>
+        <div className={`bg-[#0A0E1A] rounded-lg border border-[#1a2540] ${isCollapsed ? 'p-2 text-center' : 'p-3 text-center'}`}>
           {currentTime ? (
-            <>
-              <div className="text-sm font-medium text-gray-300">
-                {format(currentTime, "MMM dd, yyyy")}
-              </div>
-              <div className="text-lg font-mono text-[#00D4AA] mt-1 space-x-1">
-                <span>{format(currentTime, "HH:mm:ss")}</span>
-                <span className="text-xs text-gray-500">WIB</span>
-              </div>
-            </>
+            isCollapsed ? (
+              <Clock className="w-5 h-5 text-[#00D4AA] mx-auto" />
+            ) : (
+              <>
+                <div className="text-sm font-medium text-gray-300">
+                  {format(currentTime, "MMM dd, yyyy")}
+                </div>
+                <div className="text-lg font-mono text-[#00D4AA] mt-1 space-x-1">
+                  <span>{format(currentTime, "HH:mm:ss")}</span>
+                  <span className="text-xs text-gray-500">WIB</span>
+                </div>
+              </>
+            )
           ) : (
             <div className="h-[46px] animate-pulse bg-white/5 rounded" />
           )}

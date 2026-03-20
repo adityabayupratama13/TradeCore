@@ -153,7 +153,7 @@ async function checkTriggersForPair(symbol: string, pair: any) {
   }
 
   if (trigger && trigger.strength < 2) {
-    console.log(`⏭️ ${symbol} trigger strength ${trigger.strength} < 2. Skip.`);
+    console.log(`Min trigger strength: 2. Skipping ${symbol}.`);
     return;
   }
 

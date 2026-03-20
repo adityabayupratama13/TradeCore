@@ -19,7 +19,12 @@ const checkMarketStatus = () => {
   return { open: false, text: "IDX CLOSED", color: "text-[#FF4757] bg-[#FF4757]/10 border-[#FF4757]/20" };
 };
 
-export function TopBar() {
+interface TopBarProps {
+  onToggleSidebar?: () => void;
+  isCollapsed?: boolean;
+}
+
+export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
   const pathname = usePathname();
   const [marketStatus, setMarketStatus] = useState(checkMarketStatus());
 
@@ -80,38 +85,49 @@ export function TopBar() {
   const activeModeData = getModeConfig(statusData.activeMode);
 
   return (
-    <div className="fixed top-0 left-[240px] right-0 h-16 bg-[#0E1628]/95 backdrop-blur z-10 border-b border-[#1a2540] flex items-center justify-between px-6">
+    <div className="fixed top-0 left-0 md:left-[var(--current-sidebar-width)] right-0 h-[var(--header-height)] bg-[#0E1628]/95 backdrop-blur z-50 border-b border-[#1a2540] flex items-center justify-between px-4 md:px-6 transition-all duration-300">
       
-      {/* Title */}
-      <div className="flex-1">
+      {/* MOBILE LEFT: Hamburger */}
+      <button onClick={onToggleSidebar} className="md:hidden text-white p-2 -ml-2">
+        <svg fill="currentColor" viewBox="0 0 20 20" className="w-6 h-6"><path fillRule="evenodd" d="M3 5h14a1 1 0 110 2H3a1 1 0 010-2zM3 10h14a1 1 0 110 2H3a1 1 0 010-2zM3 15h14a1 1 0 110 2H3a1 1 0 010-2z" clipRule="evenodd" /></svg>
+      </button>
+
+      {/* MOBILE CENTER: Logo */}
+      <div className="md:hidden font-bold tracking-wider text-white text-md absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+         <span className="text-[#00D4AA]">⬡</span>
+         TRADE CORE
+      </div>
+
+      {/* DESKTOP Title */}
+      <div className="hidden md:flex flex-1">
         <h1 className="text-lg font-semibold text-white">
           {getPageTitle(pathname)}
         </h1>
       </div>
 
       {/* Status Chips */}
-      <div className="flex items-center gap-4 flex-none">
+      <div className="flex items-center gap-2 md:gap-4 flex-none ml-auto md:ml-0">
         
         {/* Total Capital */}
-        <div className="flex flex-col text-right">
+        <div className="hidden md:flex flex-col text-right">
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Total Capital</span>
           <span className="text-sm font-mono text-white font-medium">{formatUSD(statusData.totalCapital)}</span>
         </div>
 
-        <div className="w-[1px] h-8 bg-[#1a2540]" />
+        <div className="hidden md:block w-[1px] h-8 bg-[#1a2540]" />
 
         {/* Today P&L */}
-        <div className="flex flex-col text-right">
+        <div className="hidden md:flex flex-col text-right">
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Today P&L</span>
           <span className={`text-sm font-mono font-medium ${statusData.dailyPnl >= 0 ? "text-[#00D4AA]" : "text-[#FF4757]"}`}>
              {formatPnL(statusData.dailyPnl)}
           </span>
         </div>
 
-        <div className="w-[1px] h-8 bg-[#1a2540]" />
+        <div className="hidden md:block w-[1px] h-8 bg-[#1a2540]" />
 
         {/* Drawdown */}
-        <div className="flex flex-col items-center gap-1 w-24">
+        <div className="hidden md:flex flex-col items-center gap-1 w-24">
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider w-full text-center">Drawdown</span>
           <div className="w-full bg-[#0A0E1A] h-1.5 rounded-full overflow-hidden flex items-center">
             <div 
@@ -121,12 +137,12 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="w-[1px] h-8 bg-[#1a2540]" />
+        <div className="hidden md:block w-[1px] h-8 bg-[#1a2540]" />
 
         {/* Trading Mode */}
         <div className="flex flex-col text-right cursor-pointer" onClick={() => window.location.href='/risk'}>
-          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Mode</span>
-          <div className="text-[11px] px-2 py-0.5 mt-0.5 rounded font-bold tracking-widest text-center" 
+          <span className="hidden md:block text-[10px] text-gray-400 font-medium uppercase tracking-wider">Mode</span>
+          <div className="text-[10px] md:text-[11px] px-2 py-0.5 md:mt-0.5 rounded font-bold tracking-widest text-center" 
                style={{ 
                  color: activeModeData.color, 
                  backgroundColor: activeModeData.color + '20' 
@@ -135,12 +151,12 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="w-[1px] h-8 bg-[#1a2540]" />
+        <div className="hidden md:block w-[1px] h-8 bg-[#1a2540]" />
 
         {/* Risk Status */}
         <div className="flex flex-col text-right">
-          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Risk Status</span>
-          <div className={`text-[11px] px-2 py-0.5 mt-0.5 rounded font-bold tracking-widest text-center ${
+          <span className="hidden md:block text-[10px] text-gray-400 font-medium uppercase tracking-wider">Risk Status</span>
+          <div className={`text-[10px] md:text-[11px] px-2 py-0.5 md:mt-0.5 rounded font-bold tracking-widest text-center ${
             statusData.riskStatus === 'SAFE' ? 'text-[#00D4AA] bg-[#00D4AA]/10' :
             statusData.riskStatus === 'WARNING' ? 'text-[#FFA502] bg-[#FFA502]/10' :
             'text-[#FF4757] bg-[#FF4757]/10'
@@ -151,7 +167,7 @@ export function TopBar() {
       </div>
 
       {/* Market Badges */}
-      <div className="flex-1 flex justify-end gap-3">
+      <div className="hidden md:flex flex-1 justify-end gap-3">
         <div className={`px-2 py-1 flex items-center gap-1.5 rounded border text-[11px] font-bold tracking-wider ${marketStatus.color}`}>
           <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
           {marketStatus.text}

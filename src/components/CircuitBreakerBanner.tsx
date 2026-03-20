@@ -60,28 +60,28 @@ export function CircuitBreakerBanner() {
 
   if (status.isLocked) {
     return (
-      <div className="w-full bg-[#FF4757]/10 border-2 border-[#FF4757] p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-50">
-        <div className="flex items-center gap-3 text-[#FF4757]">
-          <Lock className="w-6 h-6 animate-pulse" />
+      <div className="w-full bg-[#FF4757]/10 border-2 border-[#FF4757] p-4 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-4 z-50 text-center md:text-left">
+        <div className="flex flex-col md:flex-row items-center gap-3 text-[#FF4757]">
+          <Lock className="w-8 h-8 md:w-6 md:h-6 animate-pulse shrink-0" />
           <div>
-            <div className="font-bold tracking-widest text-lg">TRADING LOCKED</div>
-            <div className="text-sm opacity-90">{status.reason || 'Daily loss limit reached'}</div>
+            <div className="font-bold tracking-widest text-xl md:text-lg">TRADING LOCKED</div>
+            <div className="text-sm opacity-90 mt-1 md:mt-0">{status.reason || 'Daily loss limit reached'}</div>
           </div>
         </div>
         
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="font-mono font-bold text-xl text-white">Unlocks in: {timeLeft}</div>
-            <div className="text-xs text-[#FF4757]/80">Resumes at: {new Date(status.lockedUntil!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 w-full md:w-auto">
+          <div className="text-center md:text-right w-full md:w-auto">
+            <div className="font-mono font-bold text-2xl md:text-xl text-white">Unlocks in: {timeLeft}</div>
+            <div className="text-xs text-[#FF4757]/80 mt-1 md:mt-0">Resumes at: {new Date(status.lockedUntil!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
           </div>
-          <div className="flex flex-col gap-2">
-            <Link href="/journal" className="bg-[#FF4757] text-[#0A0E1A] font-bold px-6 py-2 rounded text-center hover:bg-[#FF4757]/80 transition-colors">
+          <div className="flex flex-col w-full md:w-auto gap-2">
+            <Link href="/journal" className="bg-[#FF4757] text-[#0A0E1A] font-bold px-6 py-3 md:py-2 rounded text-center hover:bg-[#FF4757]/80 transition-colors w-full">
               Review Journal
             </Link>
             <button
               onClick={handleClearLock}
               disabled={actionLoading}
-              className="bg-transparent border border-[#FF4757] text-[#FF4757] font-bold px-6 py-2 rounded text-center hover:bg-[#FF4757]/10 transition-colors disabled:opacity-50"
+              className="bg-transparent border border-[#FF4757] text-[#FF4757] font-bold px-6 py-3 md:py-2 rounded text-center hover:bg-[#FF4757]/10 transition-colors disabled:opacity-50 w-full"
             >
               🔓 Clear Lock (Manual Override)
             </button>

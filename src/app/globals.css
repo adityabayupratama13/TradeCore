@@ -5,6 +5,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 60px;
+  --header-height: 60px;
+}
+
+[data-sidebar-collapsed="true"] {
+  --current-sidebar-width: var(--sidebar-collapsed-width);
+}
+[data-sidebar-collapsed="false"] {
+  --current-sidebar-width: var(--sidebar-width);
 }
 
 @media (prefers-color-scheme: dark) {

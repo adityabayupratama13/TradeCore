@@ -308,13 +308,13 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       availablePairs.map((pair: any) => analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE'))
     );
 
-    const minConf = dynamicMinConf;
+    const minConf = 75; // hard minimum regardless of mode
 
     const validSignals = signals
       .filter(s => {
          if (s.action === 'SKIP') return false;
          if (s.confidence < minConf) {
-            console.log(`⏭️ Confidence ${s.confidence} < ${minConf} for ${s.symbol}. Skip.`);
+            console.log(`⏭️ Min confidence: 75. Actual ${s.confidence}. Skip.`);
             return false;
          }
          return true;
@@ -367,6 +367,21 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     // ABSOLUTE FIRST CHECK — NON-NEGOTIABLE
     if (!SAFE_UNIVERSE.has(symbol)) {
       console.log(`🚫 BLOCKED: ${symbol} not in SAFE_UNIVERSE. Skipping.`);
+      return;
+    }
+
+    const startOfDayWIB = new Date();
+    startOfDayWIB.setHours(0, 0, 0, 0);
+    
+    const tradesToday = await prisma.trade.count({
+      where: {
+        createdAt: { gte: startOfDayWIB },
+        status: { not: 'CANCELLED' }
+      }
+    });
+    
+    if (tradesToday >= 6) {
+      console.log(`🛑 Daily safety limit: 6 reached (${tradesToday}). Skipping.`);
       return;
     }
 
@@ -585,7 +600,11 @@ export async function calculatePositionSize(
     ? (riskRule?.riskPctMidCap ?? category.riskPct)
     : (riskRule?.riskPctLowCap ?? category.riskPct);
 
+  // IGNORE signal.leverage completely
+  // Always use getCategoryLeverage(symbol, riskRule)
   const leverage = getCategoryLeverage(symbol, riskRule);
+  console.log(`📊 Leverage: ${leverage}x (from mode settings)`);
+  // signal.leverage is never used
 
   const riskAmount = totalCapital * (riskPct / 100);
 
