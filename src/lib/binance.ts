@@ -13,6 +13,7 @@ export interface SymbolPrecision {
   pricePrecision: number;
   quantityPrecision: number;
   minQty: number;
+  maxQty: number;
   minNotional: number;
   tickSize: number;
   stepSize: number;
@@ -36,6 +37,7 @@ export async function getSymbolPrecision(symbol: string): Promise<SymbolPrecisio
           pricePrecision: s.pricePrecision,
           quantityPrecision: s.quantityPrecision,
           minQty: lotSize ? parseFloat(lotSize.minQty) : 0,
+          maxQty: lotSize ? parseFloat(lotSize.maxQty) : 0,
           minNotional: minNotional ? parseFloat(minNotional.notional) : 0,
           tickSize: priceFilter ? parseFloat(priceFilter.tickSize) : 0,
           stepSize: lotSize ? parseFloat(lotSize.stepSize) : 0
@@ -48,7 +50,7 @@ export async function getSymbolPrecision(symbol: string): Promise<SymbolPrecisio
   }
   
   return symbolPrecisionCache.get(symbol) || {
-    symbol, pricePrecision: 4, quantityPrecision: 3, minQty: 0, minNotional: 0, tickSize: 0.0001, stepSize: 0.001
+    symbol, pricePrecision: 4, quantityPrecision: 3, minQty: 0, maxQty: 0, minNotional: 0, tickSize: 0.0001, stepSize: 0.001
   };
 }
 
@@ -63,6 +65,16 @@ export async function roundPrice(symbol: string, price: number): Promise<number>
 
 export async function roundQuantity(symbol: string, qty: number): Promise<number> {
   const precision = await getSymbolPrecision(symbol);
+  
+  if (precision && qty > precision.maxQty && precision.maxQty > 0) {
+    console.log(`⚠️ Qty ${qty} exceeds maxQty ${precision.maxQty}. Capping.`);
+    qty = precision.maxQty;
+  }
+  
+  if (precision && qty < precision.minQty) {
+    throw new Error(`Qty ${qty} below minQty ${precision.minQty}`);
+  }
+
   const stepSize = precision.stepSize;
   if (!stepSize) return parseFloat(qty.toFixed(precision.quantityPrecision));
 

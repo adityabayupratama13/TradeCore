@@ -65,6 +65,8 @@ export async function runPriceWatcher(): Promise<void> {
 }
 
 async function checkTriggersForPair(symbol: string, pair: any) {
+  if (!SAFE_UNIVERSE.has(symbol)) return;
+
   const [klines15m, markPriceObj] = await Promise.all([
     getKlines(symbol, '15m', 50),
     getMarkPrice(symbol)

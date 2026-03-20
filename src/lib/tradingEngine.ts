@@ -1,4 +1,5 @@
 import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice } from './binance';
+import { SAFE_UNIVERSE } from './constants';
 import { analyzeMarket, calculateATR } from './aiEngine';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
@@ -273,8 +274,35 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
   }
 }
 
+async function checkSufficientMargin(requiredMargin: number): Promise<boolean> {
+  const balance = await getBalance();
+  const available = balance.find(b => b.asset === 'USDT')?.availableBalance ?? 0;
+  
+  // Keep 20% of total as emergency buffer
+  const totalBalance = balance.find(b => b.asset === 'USDT')?.balance ?? 0;
+  const safeBuffer = totalBalance * 0.20;
+  const usableBalance = available - safeBuffer;
+  
+  if (requiredMargin > usableBalance) {
+    console.log(`❌ Insufficient margin:
+      Required: $${requiredMargin.toFixed(2)}
+      Available: $${available.toFixed(2)}
+      Safe buffer (20%): $${safeBuffer.toFixed(2)}
+      Usable: $${usableBalance.toFixed(2)}`);
+    return false;
+  }
+  
+  return true;
+}
+
 async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any) {
     const symbol = signal.symbol;
+
+    // ABSOLUTE FIRST CHECK — NON-NEGOTIABLE
+    if (!SAFE_UNIVERSE.has(symbol)) {
+      console.log(`🚫 BLOCKED: ${symbol} not in SAFE_UNIVERSE. Skipping.`);
+      return;
+    }
 
     await prisma.tradeSignalHistory.create({
       data: {
@@ -321,6 +349,17 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     if (quantity <= 0) {
        await logEngine({ symbol, action: signal.action, signal, result: 'BLOCKED', reason: `Quantity too small: ${quantity}` });
        return; 
+    }
+
+    if (margin < 1.0) {
+      console.log(`Position margin ${margin.toFixed(2)} < $1, skipping`);
+      return;
+    }
+
+    const hasMargin = await checkSufficientMargin(margin);
+    if (!hasMargin) {
+      console.log(`⏭️ Skipping ${signal.symbol} — insufficient margin`);
+      return;
     }
 
     try {
@@ -398,6 +437,21 @@ async function logEngine({ symbol, action, signal, result, reason }: any) {
 // ==========================================
 // FIX 3: DYNAMIC POSITION SIZING & BUFFER
 // ==========================================
+function getCategoryLeverage(symbol: string, riskRule: any): number {
+  const LARGE_CAP = new Set(['BTCUSDT','ETHUSDT','BNBUSDT'])
+  const MID_CAP = new Set(['SOLUSDT','XRPUSDT','ADAUSDT','AVAXUSDT',
+    'DOTUSDT','LINKUSDT','LTCUSDT','UNIUSDT','ATOMUSDT','NEARUSDT',
+    'APTUSDT','INJUSDT','ARBUSDT','OPUSDT','SUIUSDT'])
+  
+  if (LARGE_CAP.has(symbol)) {
+    return Math.min(riskRule?.leverageLargeCap ?? 5, riskRule?.maxLeverageLarge ?? 5)
+  } else if (MID_CAP.has(symbol)) {
+    return Math.min(riskRule?.leverageMidCap ?? 8, riskRule?.maxLeverageMid ?? 8)
+  } else {
+    return Math.min(riskRule?.leverageLowCap ?? 10, riskRule?.maxLeverageLow ?? 10)
+  }
+}
+
 export async function calculatePositionSize(
   symbol: string,
   entryPrice: number,
@@ -415,18 +469,7 @@ export async function calculatePositionSize(
     ? (riskRule?.riskPctMidCap ?? category.riskPct)
     : (riskRule?.riskPctLowCap ?? category.riskPct);
 
-  let leverage = category.leverage;
-  if (signalConfidence >= 85) leverage = category.maxLeverage;
-  else if (signalConfidence >= 75) leverage = category.leverage;
-  else if (signalConfidence >= 60) leverage = Math.floor(category.leverage * 0.7);
-
-  const maxLev = category.name === 'LARGE_CAP'
-    ? (riskRule?.maxLeverageLarge ?? category.maxLeverage)
-    : category.name === 'MID_CAP'
-    ? (riskRule?.maxLeverageMid ?? category.maxLeverage)
-    : (riskRule?.maxLeverageLow ?? category.maxLeverage);
-
-  leverage = Math.min(leverage, maxLev);
+  const leverage = getCategoryLeverage(symbol, riskRule);
 
   const riskAmount = totalCapital * (riskPct / 100);
 
