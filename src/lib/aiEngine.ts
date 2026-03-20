@@ -392,24 +392,32 @@ export async function analyzeMarket(symbol: string, triggerData: any = null, act
       
       let oiSection = '';
       if (oiData && oiData.oiSignal) {
+        const oi1h = oiData.oiChange1h ?? 0;
+        const oi4h = oiData.oiChange4h ?? 0;
+        const ls = oiData.lsRatio ?? 1;
+        const ttLs = oiData.topTraderLsRatio ?? 1;
+        const tbRatio = oiData.takerBuyRatio ?? 0.5;
+        const tsRatio = oiData.takerSellRatio ?? 0.5;
+        const currentOIValue = oiData.currentOIValue ?? 0;
+        
         oiSection = `OPEN INTEREST ANALYSIS:
-Current OI: $${(oiData.currentOIValue / 1e9).toFixed(2)}B
-OI Change 1h: ${oiData.oiChange1h > 0 ? '+' : ''}${oiData.oiChange1h.toFixed(2)}%
-OI Change 4h: ${oiData.oiChange4h > 0 ? '+' : ''}${oiData.oiChange4h.toFixed(2)}%
+Current OI: $${(currentOIValue / 1e9).toFixed(2)}B
+OI Change 1h: ${oi1h > 0 ? '+' : ''}${oi1h.toFixed(2)}%
+OI Change 4h: ${oi4h > 0 ? '+' : ''}${oi4h.toFixed(2)}%
 OI Trend: ${oiData.oiTrend}
 
 POSITION SENTIMENT:
-Long/Short Ratio (all accounts): ${oiData.lsRatio.toFixed(3)}
-Top Trader L/S Ratio: ${oiData.topTraderLsRatio.toFixed(3)}
-  ${oiData.topTraderLsRatio > 1.3 ? '→ Smart money leaning LONG' :
-    oiData.topTraderLsRatio < 0.8 ? '→ Smart money leaning SHORT' :
+Long/Short Ratio (all accounts): ${ls.toFixed(3)}
+Top Trader L/S Ratio: ${ttLs.toFixed(3)}
+  ${ttLs > 1.3 ? '→ Smart money leaning LONG' :
+    ttLs < 0.8 ? '→ Smart money leaning SHORT' :
     '→ Smart money neutral'}
 
 TAKER AGGRESSION:
-Buy Volume: ${(oiData.takerBuyRatio * 100).toFixed(1)}%
-Sell Volume: ${(oiData.takerSellRatio * 100).toFixed(1)}%
-  ${oiData.takerBuyRatio > 0.6 ? '→ Aggressive buyers in control' :
-    oiData.takerSellRatio > 0.6 ? '→ Aggressive sellers in control' :
+Buy Volume: ${(tbRatio * 100).toFixed(1)}%
+Sell Volume: ${(tsRatio * 100).toFixed(1)}%
+  ${tbRatio > 0.6 ? '→ Aggressive buyers in control' :
+    tsRatio > 0.6 ? '→ Aggressive sellers in control' :
     '→ Balanced taker flow'}
 
 OI SIGNAL: ${oiData.oiSignal.type} (Strength: ${oiData.oiSignal.strength}/3)
@@ -430,17 +438,17 @@ OI TRADING RULES:
       }
 
       hunterContext = `MARKET DYNAMICS:
-Funding Rate: ${fundingRate > 0 ? '+' : ''}${(fundingRate * 100).toFixed(4)}%
+Funding Rate: ${fundingRate > 0 ? '+' : ''}${((fundingRate||0) * 100).toFixed(4)}%
 Category: ${fundingCategory}
 Crowd Position: ${direction}
 Contrarian Signal: ${biasSide}
 Squeeze Risk: ${squeezeRisk}
-24h Volume: $${(volume24h / 1_000_000).toFixed(0)}M
-24h Price Change: ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%
+24h Volume: $${((volume24h||0) / 1_000_000).toFixed(0)}M
+24h Price Change: ${priceChange24h > 0 ? '+' : ''}${(priceChange24h||0).toFixed(2)}%
 
 SQUEEZE ANALYSIS:
 ${fundingCategory === 'EXTREME' ? 
-  `⚡ EXTREME FUNDING DETECTED (${(fundingRate*100).toFixed(4)}%)
+  `⚡ EXTREME FUNDING DETECTED (${((fundingRate||0)*100).toFixed(4)}%)
    ${direction === 'LONG_HEAVY' ? 
      'Market is severely overcrowded LONG. Forced liquidations likely on any drop. Strong SHORT bias.' : 
      'Market is severely overcrowded SHORT. Short squeeze imminent on any pump. Strong LONG bias.'}
