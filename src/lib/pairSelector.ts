@@ -381,43 +381,8 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     .filter(p => p.fundingCategory !== 'NORMAL')
     .slice(0, 20);
 
-  // Guarantee minimum pairs with fallback
-  const FALLBACK = [
-    'BTCUSDT','ETHUSDT','SOLUSDT',
-    'DOGEUSDT','HYPEUSDT','XRPUSDT',
-    'ADAUSDT','AVAXUSDT','LINKUSDT','DOTUSDT'
-  ];
-
-  while (top20.length < 10) {
-    const fallback = FALLBACK.find(s => 
-      !top20.some(p => p.symbol === s)
-    );
-    if (!fallback) break;
-    top20.push({
-      symbol: fallback,
-      fundingRate: 0,
-      markPrice: 0,
-      volume24h: 100000000,
-      priceChange24h: 0,
-      highPrice24h: 0,
-      lowPrice24h: 0,
-      absFundingRate: 0,
-      fundingCategory: 'NORMAL',
-      direction: 'NEUTRAL',
-      biasSide: 'NEUTRAL',
-      squeezeRisk: 'LOW',
-      score: 0,
-      tier: 'ACTIVE',
-      oiData: {
-        symbol: fallback, currentOI: 0, currentOIValue: 0, oiChange1h: 0, oiChange4h: 0, oiChange24h: 0,
-        oiTrend: 'STABLE', oiMomentum: 0, longRatio: 0.5, shortRatio: 0.5, lsRatio: 1, topTraderLsRatio: 1,
-        takerBuyRatio: 0.5, takerSellRatio: 0.5, oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' }
-      },
-      oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' },
-      oiValue: '—',
-      oiChange1h: 'N/A'
-    });
-  }
+  // No hardcoded padding anymore! 
+  // We depend 100% organically on the dynamic search.
 
   const finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
   
