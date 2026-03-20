@@ -56,15 +56,26 @@ model TradeJournal {
 
 model RiskRule {
   id                  String   @id @default(cuid())
-  maxDailyLossPct     Float    @default(3)
-  maxWeeklyLossPct    Float    @default(7)
-  maxDrawdownPct      Float    @default(15)
-  maxPositionSizePct  Float    @default(2)
+  maxDailyLossPct     Float    @default(30)
+  maxWeeklyLossPct    Float    @default(50)
+  maxDrawdownPct      Float    @default(70)
+  maxPositionSizePct  Float    @default(10)
   maxRiskPerTradePct  Float    @default(2)
-  maxLeverage         Float    @default(3)
+  maxLeverage         Float    @default(70)
   maxOpenPositions    Int      @default(5)
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
+
+  riskPctLargeCap     Float    @default(5)
+  riskPctMidCap       Float    @default(7)
+  riskPctLowCap       Float    @default(10)
+  minProfitTargetPct  Float    @default(15)
+  leverageLargeCap    Int      @default(50)
+  leverageMidCap      Int      @default(20)
+  leverageLowCap      Int      @default(20)
+  maxLeverageLarge    Int      @default(70)
+  maxLeverageMid      Int      @default(30)
+  maxLeverageLow      Int      @default(30)
 }
 
 model RiskEvent {

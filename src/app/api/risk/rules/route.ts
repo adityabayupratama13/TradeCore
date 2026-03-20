@@ -3,13 +3,23 @@ import { prisma } from '../../../../../lib/prisma';
 import { z } from 'zod';
 
 const rulesSchema = z.object({
-  maxDailyLossPct: z.number().min(1).max(10).optional(),
-  maxWeeklyLossPct: z.number().min(3).max(20).optional(),
-  maxDrawdownPct: z.number().min(5).max(30).optional(),
-  maxPositionSizePct: z.number().min(5).max(50).optional(),
-  maxRiskPerTradePct: z.number().min(0.5).max(5).optional(),
-  maxLeverage: z.number().min(1).max(20).optional(),
-  maxOpenPositions: z.number().min(1).max(10).optional()
+  maxDailyLossPct: z.number().optional(),
+  maxWeeklyLossPct: z.number().optional(),
+  maxDrawdownPct: z.number().optional(),
+  maxPositionSizePct: z.number().optional(),
+  maxRiskPerTradePct: z.number().optional(),
+  maxLeverage: z.number().optional(),
+  maxOpenPositions: z.number().optional(),
+  riskPctLargeCap: z.number().optional(),
+  riskPctMidCap: z.number().optional(),
+  riskPctLowCap: z.number().optional(),
+  minProfitTargetPct: z.number().optional(),
+  leverageLargeCap: z.number().optional(),
+  leverageMidCap: z.number().optional(),
+  leverageLowCap: z.number().optional(),
+  maxLeverageLarge: z.number().optional(),
+  maxLeverageMid: z.number().optional(),
+  maxLeverageLow: z.number().optional()
 });
 
 export async function PATCH(req: Request) {

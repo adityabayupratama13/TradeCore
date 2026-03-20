@@ -365,25 +365,18 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     finalActive.push({ ...p, tier: 'ACTIVE' });
   }
 
-  // Always add BTCUSDT
-  let hasBTC = finalActive.find(p => p.symbol === 'BTCUSDT');
-  if (!hasBTC) {
-    const btcRaw = scoredPairs.find(p => p.symbol === 'BTCUSDT');
-    if (btcRaw) {
-      if (finalActive.length === 5) {
-        finalActive.pop(); // Remove lowest scored to make room
-      }
-      finalActive.unshift({ ...btcRaw, tier: 'ACTIVE' }); // Add to front
-    }
-  }
-
-  // Double check length limits and default fallbacks if empty
-  if (finalActive.length === 0) {
-    const defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-    for (const sym of defaultSymbols) {
-      const p = scoredPairs.find(x => x.symbol === sym);
-      if (p) finalActive.push({ ...p, tier: 'ACTIVE' });
-    }
+  // If we don't naturally find 5, pad with SAFEST large caps
+  const FALLBACKS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+  if (finalActive.length < 5) {
+     for (const fb of FALLBACKS) {
+       if (finalActive.length >= 5) break; 
+       if (!finalActive.find(s => s.symbol === fb)) {
+          const p = scoredPairs.find(x => x.symbol === fb);
+          if (p) {
+             finalActive.push({ ...p, tier: 'ACTIVE' });
+          }
+       }
+     }
   }
 
   await prisma.appSettings.upsert({

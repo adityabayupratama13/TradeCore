@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
 import { MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
+import { getCoinCategory } from './coinCategories';
 
 let cycleNumber = 0;
 
@@ -180,61 +181,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const isEngineStr = process.env.ENGINE_ENABLED || (enabledSetting ? enabledSetting.value : 'false');
     if (isEngineStr !== 'true' && !isTestMode) return;
 
-    // ADDITION 1: ANTI-OVERTRADING GUARD
-    // 1. MAX TRADES PER DAY
-    const startOfDayWib = new Date();
-    startOfDayWib.setHours(0,0,0,0);
-    const todayTradeCount = await prisma.trade.count({
-      where: { entryAt: { gte: startOfDayWib }, status: { not: 'CANCELLED' } }
-    });
-    if (todayTradeCount >= 4) {
-       const lockKey = `daily_limit_alert_${startOfDayWib.toISOString()}`;
-       const hasAlerted = await prisma.appSettings.findUnique({ where: { key: lockKey } });
-       if (!hasAlerted) {
-          await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "🚫 Daily trade limit reached. Engine paused until tomorrow." } } as any);
-          await prisma.appSettings.create({ data: { key: lockKey, value: 'true' } });
-       }
-       await logEngine({ symbol, action: 'ABORT', result: 'BLOCKED', reason: `Daily trade limit reached (4/4)` });
-       return;
-    }
-
-    // 2. MAX CONSECUTIVE LOSSES
-    const lossCooldown = await prisma.appSettings.findUnique({ where: { key: 'consecutive_loss_cooldown' } });
-    if (lossCooldown && new Date(lossCooldown.value).getTime() > Date.now()) {
-       await logEngine({ symbol, action: 'ABORT', result: 'BLOCKED', reason: `Cooling down from consecutive losses` });
-       return;
-    }
-    const lastTwoTrades = await prisma.trade.findMany({
-       where: { status: 'CLOSED' },
-       orderBy: { exitAt: 'desc' },
-       take: 2
-    });
-    if (lastTwoTrades.length === 2) {
-       const isLoss1 = lastTwoTrades[0].pnlPct !== null && lastTwoTrades[0].pnlPct! < 0;
-       const isLoss2 = lastTwoTrades[1].pnlPct !== null && lastTwoTrades[1].pnlPct! < 0;
-       if (isLoss1 && isLoss2) {
-          const resumeTime = new Date(Date.now() + 2 * 3600000); 
-          await prisma.appSettings.upsert({
-             where: { key: 'consecutive_loss_cooldown' },
-             update: { value: resumeTime.toISOString() },
-             create: { key: 'consecutive_loss_cooldown', value: resumeTime.toISOString() }
-          });
-          const timeStr = resumeTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-          await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⛔ 2 CONSECUTIVE LOSSES DETECTED\nEngine cooling down for 2 hours.\nReview your journal before next trade.\nResumes at: ${timeStr} WIB` } } as any);
-          await logEngine({ symbol, action: 'ABORT', result: 'BLOCKED', reason: `2 consecutive losses — cooling down 2 hours` });
-          return;
-       }
-    }
-
-    // 3. MIN TIME BETWEEN TRADES (30 minutes)
-    const lastTrade = await prisma.appSettings.findUnique({ where: { key: 'last_trade_executed_at' } });
-    if (lastTrade) {
-       const minWait = 30 * 60000;
-       if (Date.now() - new Date(lastTrade.value).getTime() < minWait) {
-          await logEngine({ symbol, action: 'ABORT', result: 'BLOCKED', reason: `Min time between trades (30 min) not reached` });
-          return;
-       }
-    }
+    // REMOVED ANTI-OVERTRADING GUARDS (FIX 6: Delete restrictive arbitrary trade limits and consecutive stop-loss freezes)
 
     const { isLocked } = await checkAndEnforceCircuitBreaker();
     if (isLocked) {
@@ -280,7 +227,52 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
        return;
     }
 
-    const signal = await analyzeMarket(symbol, triggerData);
+    const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+    let activePairs = [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
+    if (setting?.value) { try { activePairs = JSON.parse(setting.value); } catch(e){} }
+    
+    // Filter out already open symbols
+    const availablePairs = activePairs.filter((p: any) => !currentSymbols.has(p.symbol));
+
+    const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
+    const maxPositions = riskRule?.maxOpenPositions ?? 5;
+    const availableSlots = maxPositions - currentSymbols.size;
+
+    if (availableSlots <= 0) {
+      console.log(`Max ${maxPositions} positions open. Monitoring only.`);
+      return;
+    }
+
+    console.log(`🔍 Analyzing ${availablePairs.length} pairs simultaneously...`);
+    const signals = await Promise.all(
+      availablePairs.map((pair: any) => analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null))
+    );
+
+    const validSignals = signals
+      .filter(s => s.action !== 'SKIP' && s.confidence >= 55)
+      .sort((a, b) => b.confidence - a.confidence);
+
+    console.log(`✅ Valid signals: ${validSignals.length}. Executing up to ${availableSlots}...`);
+
+    for (let i = 0; i < Math.min(validSignals.length, availableSlots); i++) {
+        await executeTradeSignal(validSignals[i], portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule);
+        await sleep(1000);
+    }
+
+    await prisma.appSettings.upsert({
+       where: { key: 'engine_status' },
+       update: { value: 'RUNNING' },
+       create: { key: 'engine_status', value: 'RUNNING' }
+    });
+
+  } catch (globalErr: any) {
+    console.error('CRITICAL ENGINE LOOP FAILURE:', globalErr);
+    return { success: false, reason: `CRITICAL ERROR: ${globalErr.message}` };
+  }
+}
+
+async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any) {
+    const symbol = signal.symbol;
 
     await prisma.tradeSignalHistory.create({
       data: {
@@ -298,68 +290,31 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       }
     });
 
-    let positionSizeMult = 1.0;
-    
-    if (signal.action === 'SKIP') {
-      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `AI SKIP: ${signal.reasoning}` });
-      return { success: false, reason: `AI SKIP: ${signal.reasoning}` };
-    }
-
-    if (isTestMode) {
-      if (signal.confidence < 50) {
-         await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Test mode low confidence: ${signal.confidence}` });
-         return { success: false, reason: `Test mode low confidence: ${signal.confidence}` };
-      }
-      signal.leverage = 1;
-      positionSizeMult = 1.0; 
-    } else {
-      if (signal.confidence >= 60) {
-        positionSizeMult = 1.0;
-      } else if (signal.confidence >= 55) {
-        positionSizeMult = 0.5;
-        signal.leverage = 1;
-      } else {
-        await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Low confidence (Threshold 55): ${signal.confidence}` });
-        return;
-      }
-    }
-
     if (!signal.entryPrice || !signal.stopLoss || !signal.takeProfit) {
         await logEngine({ symbol, action: signal.action, signal, result: 'ERROR', reason: `LLM missing targets` });
         return; 
     }
 
-    const slDistance = Math.abs(signal.entryPrice - signal.stopLoss);
-    if (slDistance === 0) return;
+    // NEW FIX 3: DYNAMIC POSITION SIZING
+    const { quantity, margin, leverage, liqPrice, adjustedSl } = await calculatePositionSize(
+      symbol, signal.entryPrice, signal.stopLoss, signal.action === 'LONG' ? 'BUY' : 'SELL', totalWalletBalance, signal.confidence
+    );
+    signal.stopLoss = adjustedSl;
+    signal.leverage = leverage;
 
-    const maxRiskPct = 2 * positionSizeMult; 
-    const riskAmountUsdt = availableBalance * (maxRiskPct / 100);
+    // NEW FIX 4: TP MINIMUM 15% ENFORCE
+    signal = enforceMinProfitTarget(signal, margin * leverage, totalWalletBalance, riskRule?.minProfitTargetPct ?? 15);
     
-    let quantity = riskAmountUsdt / slDistance;
-
-    if (isTestMode) {
-       const minQty = 10 / signal.entryPrice;
-       quantity = Math.max(quantity, minQty);
-    }
-    
-    quantity = Math.floor(quantity * 1000) / 1000;
-
-    const notionalValue = quantity * signal.entryPrice;
-    const marginRequired = notionalValue / signal.leverage;
-
-    if (marginRequired > availableBalance * 0.5) {
-       const reductionFactor = (availableBalance * 0.5) / marginRequired;
-       quantity = Math.floor((quantity * reductionFactor) * 1000) / 1000;
-       await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⚠️ Position too large — auto-reducing to 50% of available margin for ${symbol}` } } as any);
-    }
-
-    const precision = await getSymbolPrecision(symbol);
-    const orderValue = signal.entryPrice * quantity;
-    if (orderValue < precision.minNotional) {
-       const minQty = Math.ceil(precision.minNotional / signal.entryPrice / precision.stepSize) * precision.stepSize;
-       quantity = Math.max(quantity, minQty);
-       console.log(`📊 Adjusted qty to meet min notional: ${quantity}`);
-    }
+    // Round signal targets gracefully Native limits
+    try {
+      const precision = await getSymbolPrecision(symbol).catch(() => ({ pricePrecision: 2, tickSize: 0.01 }));
+      const tickSize = precision.tickSize;
+      const decStr = tickSize.toString().split('.')[1] || '';
+      const decimals = decStr.length;
+      signal.entryPrice = parseFloat((Math.round(signal.entryPrice / tickSize) * tickSize).toFixed(decimals));
+      signal.stopLoss = parseFloat((Math.round(signal.stopLoss / tickSize) * tickSize).toFixed(decimals));
+      signal.takeProfit = parseFloat((Math.round(signal.takeProfit / tickSize) * tickSize).toFixed(decimals));
+    } catch(e) {}
 
     if (quantity <= 0) {
        await logEngine({ symbol, action: signal.action, signal, result: 'BLOCKED', reason: `Quantity too small: ${quantity}` });
@@ -387,7 +342,9 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
           stopLoss: signal.stopLoss,
           takeProfit: signal.takeProfit,
           quantity,
-          leverage: signal.leverage
+          leverage: signal.leverage,
+          slAlgoId: res.slAlgoId?.toString(),
+          tpAlgoId: res.tpAlgoId?.toString()
         }
       });
 
@@ -400,7 +357,10 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
           price: signal.entryPrice, size: quantity,
           sl: signal.stopLoss, tp: signal.takeProfit,
           rr: parseFloat(String(signal.riskReward || 2)).toFixed(2),
-          riskPct: maxRiskPct
+          // Append explicit info required by FIX 10
+          leverage: signal.leverage, category: getCoinCategory(symbol).name,
+          liqPrice: liqPrice.toFixed(4), buffer: ((Math.abs(signal.entryPrice - signal.stopLoss) / (signal.entryPrice / signal.leverage)) * 100).toFixed(1),
+          margin: margin.toFixed(2), positionValue: (margin * signal.leverage).toFixed(2), riskAmount: (totalWalletBalance * 0.05).toFixed(2), riskPct: 5, profitAmount: 0, profitPct: 0
         }
       });
 
@@ -414,24 +374,11 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
          await prisma.appSettings.create({ data: { key: 'test_trade_fired', value: 'true' } });
       }
 
-      return { success: true, order: res, signal };
-
     } catch (execErr: any) {
       await logEngine({ symbol, action: signal.action, signal, result: 'ERROR', reason: execErr.message });
-      return { success: false, reason: `EXECUTION ERROR: ${execErr.message}` };
     }
-
-    await prisma.appSettings.upsert({
-       where: { key: 'engine_status' },
-       update: { value: 'RUNNING' },
-       create: { key: 'engine_status', value: 'RUNNING' }
-    });
-
-  } catch (globalErr: any) {
-    console.error('CRITICAL ENGINE LOOP FAILURE:', globalErr);
-    return { success: false, reason: `CRITICAL ERROR: ${globalErr.message}` };
-  }
 }
+
 
 async function logEngine({ symbol, action, signal, result, reason }: any) {
   await prisma.engineLog.create({
@@ -444,4 +391,123 @@ async function logEngine({ symbol, action, signal, result, reason }: any) {
       reason
     }
   });
+}
+
+// ==========================================
+// FIX 3: DYNAMIC POSITION SIZING & BUFFER
+// ==========================================
+export async function calculatePositionSize(
+  symbol: string,
+  entryPrice: number,
+  stopLoss: number,
+  side: 'BUY' | 'SELL',
+  totalCapital: number,
+  signalConfidence: number
+): Promise<{ quantity: number, margin: number, leverage: number, liqPrice: number, adjustedSl: number }> {
+  const category = getCoinCategory(symbol);
+  const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
+
+  const riskPct = symbol === 'BTCUSDT' || symbol === 'ETHUSDT' || symbol === 'BNBUSDT'
+    ? (riskRule?.riskPctLargeCap ?? category.riskPct)
+    : category.symbols.includes(symbol)
+    ? (riskRule?.riskPctMidCap ?? category.riskPct)
+    : (riskRule?.riskPctLowCap ?? category.riskPct);
+
+  let leverage = category.leverage;
+  if (signalConfidence >= 85) leverage = category.maxLeverage;
+  else if (signalConfidence >= 75) leverage = category.leverage;
+  else if (signalConfidence >= 60) leverage = Math.floor(category.leverage * 0.7);
+
+  const maxLev = category.name === 'LARGE_CAP'
+    ? (riskRule?.maxLeverageLarge ?? category.maxLeverage)
+    : category.name === 'MID_CAP'
+    ? (riskRule?.maxLeverageMid ?? category.maxLeverage)
+    : (riskRule?.maxLeverageLow ?? category.maxLeverage);
+
+  leverage = Math.min(leverage, maxLev);
+
+  const riskAmount = totalCapital * (riskPct / 100);
+
+  const rawSlDistance = Math.abs(entryPrice - stopLoss);
+  const effectiveSlDistance = rawSlDistance * 0.80; // 20% gap buffer
+
+  const positionValue = riskAmount / (effectiveSlDistance / entryPrice);
+  const margin = positionValue / leverage;
+  const rawQuantity = positionValue / entryPrice;
+  // Apply binance scaling step sizes natively
+  const precision = await getSymbolPrecision(symbol).catch(() => ({ stepSize: 0.001 }));
+  const stepParts = precision.stepSize.toString().split('.');
+  const decimals = stepParts.length > 1 ? stepParts[1].length : 0;
+  const quantity = parseFloat((Math.floor(rawQuantity / precision.stepSize) * precision.stepSize).toFixed(decimals));
+
+  const liqDistance = entryPrice / leverage;
+  const liqPrice = side === 'BUY'
+    ? entryPrice - liqDistance
+    : entryPrice + liqDistance;
+
+  const slBeforeLiq = side === 'BUY'
+    ? stopLoss > liqPrice
+    : stopLoss < liqPrice;
+
+  let adjustedSl = stopLoss;
+  if (!slBeforeLiq) {
+    console.error('❌ SL beyond liquidation! Auto-adjusting...');
+    if (side === 'BUY') {
+      adjustedSl = liqPrice + (liqDistance * 0.30);
+    } else {
+      adjustedSl = liqPrice - (liqDistance * 0.30);
+    }
+  }
+
+  const slBuffer = ((Math.abs(entryPrice - adjustedSl) / liqDistance) * 100).toFixed(1);
+
+  console.log(`
+📊 ${symbol} (${category.name}):
+   Capital: ${totalCapital.toFixed(2)} USDT
+   Risk: ${riskPct}% = ${riskAmount.toFixed(2)} USDT
+   Leverage: ${leverage}x (confidence: ${signalConfidence}%)
+   Position: ${positionValue.toFixed(2)} USDT
+   Margin: ${margin.toFixed(2)} USDT
+   Quantity: ${quantity}
+   SL: ${adjustedSl} | Liq: ${liqPrice.toFixed(4)}
+   Safety buffer: ${slBuffer}%`);
+
+  return { quantity, margin, leverage, liqPrice, adjustedSl };
+}
+
+// ==========================================
+// FIX 4: TP MINIMUM 15% TARGET ENFORCEMENT
+// ==========================================
+export function enforceMinProfitTarget(
+  signal: any,
+  positionValue: number,
+  totalCapital: number,
+  minProfitTargetPct: number
+): any {
+  if (signal.action === 'SKIP' || !signal.takeProfit) return signal;
+
+  const tpDistance = Math.abs(signal.entryPrice - signal.takeProfit);
+  const tpDistancePct = tpDistance / signal.entryPrice;
+  const potentialProfit = positionValue * tpDistancePct;
+  const profitAsPctOfCapital = (potentialProfit / totalCapital) * 100;
+
+  console.log(`🎯 TP analysis:
+    Potential profit: ${potentialProfit.toFixed(2)} USDT
+    As % of capital: ${profitAsPctOfCapital.toFixed(2)}%
+    Minimum target: ${minProfitTargetPct}%`);
+
+  if (profitAsPctOfCapital < minProfitTargetPct) {
+    const requiredTpDistancePct = (totalCapital * minProfitTargetPct / 100) / positionValue;
+    const requiredTpDistance = signal.entryPrice * requiredTpDistancePct;
+
+    if (signal.action === 'LONG') {
+      signal.takeProfit = signal.entryPrice + requiredTpDistance;
+    } else {
+      signal.takeProfit = signal.entryPrice - requiredTpDistance;
+    }
+
+    console.log(`📈 TP adjusted to meet ${minProfitTargetPct}% target: ${signal.takeProfit}`);
+  }
+
+  return signal;
 }

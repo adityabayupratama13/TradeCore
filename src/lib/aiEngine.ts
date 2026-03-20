@@ -1,5 +1,6 @@
 import { getKlines, getMarkPrice, get24hrTicker, getOrderBook, Kline, roundPrice } from './binance';
 import { prisma } from '../../lib/prisma';
+import { getCoinCategory } from './coinCategories';
 
 function validateAndFixSignal(
   signal: any, 
@@ -374,6 +375,8 @@ export async function analyzeMarket(symbol: string, triggerData: any = null): Pr
   if (currentHourWIB >= 0 && currentHourWIB < 8) tradingSession = "ASIAN";
   else if (currentHourWIB >= 8 && currentHourWIB < 15) tradingSession = "LONDON";
 
+  const coinCat = getCoinCategory(symbol);
+
   const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
   let hunterContext = '';
   if (setting?.value) {
@@ -497,7 +500,8 @@ ENTRY RULES:
 - Stop loss: 1x ATR from entry
 - Take profit: 2x ATR minimum (R/R >= 1:2)
 - Max hold: 8 hours
-- Leverage: 2x default, 3x only if ADX_1h > 30
+- Category: ${coinCat.name}
+- Leverage constraints: Base ${coinCat.leverage}x, strictly maximum ${coinCat.maxLeverage}x (DO NOT exceed)
 - SKIP if RSI_15m > 72 or < 28
 - SKIP if Friday after 20:00 WIB (weekend risk)
 

@@ -12,6 +12,7 @@ export interface CircuitBreakerStatus {
   drawdownPct: number;
   warnings: string[];
   rules: any;
+  capital: number;
 }
 
 export async function checkAndEnforceCircuitBreaker(): Promise<CircuitBreakerStatus> {
@@ -58,7 +59,7 @@ async function calculateMetrics(
   if (!rules) {
     return {
       canTrade: baseCanTrade, isLocked: baseIsLocked, lockedUntil: baseLockedUntil,
-      reason: baseReason, dailyLossPct: 0, weeklyLossPct: 0, drawdownPct: 0, warnings, rules: {}
+      reason: baseReason, dailyLossPct: 0, weeklyLossPct: 0, drawdownPct: 0, warnings, rules: {}, capital: startingCapital
     };
   }
 
@@ -195,6 +196,7 @@ async function calculateMetrics(
     weeklyLossPct,
     drawdownPct,
     warnings,
-    rules
+    rules,
+    capital: startingCapital
   };
 }
