@@ -537,7 +537,8 @@ export function enforceMinProfitTarget(
   const tpDistance = Math.abs(signal.entryPrice - signal.takeProfit);
   const tpDistancePct = tpDistance / signal.entryPrice;
   const potentialProfit = positionValue * tpDistancePct;
-  const profitAsPctOfCapital = (potentialProfit / totalCapital) * 100;
+  const capitalUsdt = totalCapital / 16000;
+  const profitAsPctOfCapital = (potentialProfit / capitalUsdt) * 100;
 
   console.log(`🎯 TP analysis:
     Potential profit: ${potentialProfit.toFixed(2)} USDT
@@ -545,7 +546,7 @@ export function enforceMinProfitTarget(
     Minimum target: ${minProfitTargetPct}%`);
 
   if (profitAsPctOfCapital < minProfitTargetPct) {
-    const requiredTpDistancePct = (totalCapital * minProfitTargetPct / 100) / positionValue;
+    const requiredTpDistancePct = (capitalUsdt * minProfitTargetPct / 100) / positionValue;
     const requiredTpDistance = signal.entryPrice * requiredTpDistancePct;
 
     if (signal.action === 'LONG') {

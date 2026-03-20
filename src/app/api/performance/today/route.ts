@@ -24,7 +24,8 @@ export async function GET() {
 
     const portfolio = await prisma.portfolio.findFirst();
     const totalCapital = portfolio?.totalCapital || 1;
-    const dailyPnlPct = (dailyPnl / totalCapital) * 100;
+    const capitalUsdt = totalCapital / 16000;
+    const dailyPnlPct = (dailyPnl / capitalUsdt) * 100;
     
     // Determine dailyLossUsed
     const dailyLossUsed = dailyPnl < 0 ? Math.abs(dailyPnlPct) : 0;

@@ -35,12 +35,13 @@ export function RiskCalculator(props: RiskCalculatorProps) {
 
   // Overview calculations
   const positionSize = calculatePositionSize(safeEntry, safeQty);
-  const positionPct = totalCapital > 0 ? (positionSize / totalCapital) * 100 : 0;
+  const capitalUsdt = totalCapital / 16000;
+  const positionPct = capitalUsdt > 0 ? (positionSize / capitalUsdt) * 100 : 0;
   const marginRequired = isCrypto ? calculateMarginRequired(positionSize, leverage) : positionSize;
 
   // Risk & Reward calculations
   const riskAmount = safeSL > 0 ? calculateRiskAmount(safeEntry, safeSL, safeQty) : 0;
-  const riskPct = totalCapital > 0 ? (riskAmount / totalCapital) * 100 : 0;
+  const riskPct = capitalUsdt > 0 ? (riskAmount / capitalUsdt) * 100 : 0;
   const profitAmount = safeTP > 0 ? Math.abs(safeTP - safeEntry) * safeQty : 0;
   const rrRatio = safeTP > 0 && safeSL > 0 ? calculateRRRatio(safeEntry, safeSL, safeTP) : 0;
 
