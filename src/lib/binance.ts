@@ -406,12 +406,14 @@ export async function fetchOIDataRaw(symbol: string) {
     }
   };
 
+  const MAIN_URL = 'https://fapi.binance.com';
+
   const [currentOI, oiHist, lsRatioAcc, topTraderPos, takerVol] = await Promise.all([
-    safeFetch(`${BASE_URL}/fapi/v1/openInterest?symbol=${symbol}`),
-    safeFetch(`${BASE_URL}/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`),
-    safeFetch(`${BASE_URL}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=1h&limit=2`),
-    safeFetch(`${BASE_URL}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=1h&limit=2`),
-    safeFetch(`${BASE_URL}/futures/data/takervolumelongshort?symbol=${symbol}&period=15m&limit=2`)
+    safeFetch(`${MAIN_URL}/fapi/v1/openInterest?symbol=${symbol}`),
+    safeFetch(`${MAIN_URL}/futures/data/openInterestHist?symbol=${symbol}&period=1h&limit=25`),
+    safeFetch(`${MAIN_URL}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=1h&limit=2`),
+    safeFetch(`${MAIN_URL}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=1h&limit=2`),
+    safeFetch(`${MAIN_URL}/futures/data/takervolumelongshort?symbol=${symbol}&period=15m&limit=2`)
   ]);
   
   return { currentOI, oiHist, lsRatioAcc, topTraderPos, takerVol };
