@@ -138,7 +138,7 @@ async function checkTriggersForPair(symbol: string, pair: any) {
   
   const minsSinceLLM = (Date.now() - lastCallTime) / 60000;
   
-  if (!trigger && minsSinceLLM >= 90) {
+  if (!trigger && minsSinceLLM >= 45) {
       const closes1h = klines1h.map(k => k.close);
       const highs1h = klines1h.map(k => k.high);
       const lows1h = klines1h.map(k => k.low);
@@ -148,7 +148,7 @@ async function checkTriggersForPair(symbol: string, pair: any) {
       if (adx1h > 25 && volRatio > 1.2 && currRsi >= 35 && currRsi <= 65) {
          trigger = { triggered: true, symbol, triggerType: 'SCHEDULED_FALLBACK', strength: 2 };
       } else {
-         console.log(`⏭️ ${symbol} 90m cycle conditions not met (ADX 1h: ${adx1h.toFixed(1)}, VolRatio: ${volRatio.toFixed(2)}, RSI: ${currRsi.toFixed(1)}). Skipping.`);
+         console.log(`⏭️ ${symbol} 45m cycle conditions not met (ADX 1h: ${adx1h.toFixed(1)}, VolRatio: ${volRatio.toFixed(2)}, RSI: ${currRsi.toFixed(1)}). Skipping.`);
       }
   }
 
@@ -161,7 +161,7 @@ async function checkTriggersForPair(symbol: string, pair: any) {
      let cooldownMinutes = 15; 
      if (trigger.triggerType === 'EMA_CROSS' || trigger.triggerType === 'RSI_REVERSAL' || trigger.triggerType === 'RSI_MOMENTUM') cooldownMinutes = 20;
      else if (trigger.triggerType === 'FUNDING_EXTREME') cooldownMinutes = 30;
-     else if (trigger.triggerType === 'SCHEDULED_FALLBACK') cooldownMinutes = 60;
+     else if (trigger.triggerType === 'SCHEDULED_FALLBACK') cooldownMinutes = 30;
 
      if (minsSinceLLM >= cooldownMinutes) {
          if (trigger.strength < 2) return;

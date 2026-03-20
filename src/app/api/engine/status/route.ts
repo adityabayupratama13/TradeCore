@@ -54,7 +54,7 @@ export async function GET() {
          let cooldownMinutes = 20; 
          if (lastTrigger === 'EMA_CROSS' || lastTrigger === 'RSI_REVERSAL') cooldownMinutes = 30;
          else if (lastTrigger === 'FUNDING_EXTREME') cooldownMinutes = 45;
-         else if (lastTrigger === 'SCHEDULED_FALLBACK') cooldownMinutes = 90;
+         else if (lastTrigger === 'SCHEDULED_FALLBACK') cooldownMinutes = 30;
 
          const passedMins = (now.getTime() - lastAiCallTimeMs) / 60000;
          if (passedMins < cooldownMinutes) {
@@ -62,7 +62,7 @@ export async function GET() {
          }
       }
 
-      const nextForcedMin = minsSinceLLM !== null ? Math.max(0, 90 - minsSinceLLM) : 0;
+      const nextForcedMin = minsSinceLLM !== null ? Math.max(0, 45 - minsSinceLLM) : 0;
 
       watcherStatus[sym] = {
         lastCheckSecs: globalLastCheckSecs,
