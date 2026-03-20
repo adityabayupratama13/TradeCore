@@ -8,7 +8,21 @@ export async function POST() {
       update: { value: '' },
       create: { key: 'circuit_breaker_lock_until', value: '' }
     });
-    return NextResponse.json({ success: true, message: 'Lock cleared' });
+
+    const todayWIB = new Date();
+    await prisma.dailyPerformance.updateMany({
+      where: {
+        date: {
+          gte: new Date(todayWIB.setHours(0,0,0,0))
+        }
+      },
+      data: {
+        dailyPnl: 0,
+        dailyPnlPct: 0
+      }
+    });
+
+    return NextResponse.json({ success: true, message: 'Lock cleared & daily counter reset' });
   } catch (error) {
     console.error('Clear lock error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
