@@ -376,23 +376,24 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   });
 
   // STEP 5 - SELECT ACTIVE TRADING PAIRS
-  // Select top 10 from scored pairs
-  const top10 = scoredPairs
+  // Select top 20 from scored pairs
+  const top20 = scoredPairs
     .filter(p => p.fundingCategory !== 'NORMAL')
-    .slice(0, 10);
+    .slice(0, 20);
 
   // Guarantee minimum pairs with fallback
   const FALLBACK = [
     'BTCUSDT','ETHUSDT','SOLUSDT',
-    'DOGEUSDT','HYPEUSDT'
+    'DOGEUSDT','HYPEUSDT','XRPUSDT',
+    'ADAUSDT','AVAXUSDT','LINKUSDT','DOTUSDT'
   ];
 
-  while (top10.length < 5) {
+  while (top20.length < 10) {
     const fallback = FALLBACK.find(s => 
-      !top10.some(p => p.symbol === s)
+      !top20.some(p => p.symbol === s)
     );
     if (!fallback) break;
-    top10.push({
+    top20.push({
       symbol: fallback,
       fundingRate: 0,
       markPrice: 0,
@@ -418,7 +419,7 @@ export async function runDynamicHunter(): Promise<HunterResult> {
     });
   }
 
-  const finalActive = top10.map(p => ({ ...p, tier: 'ACTIVE' as const }));
+  const finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
   
   console.log('🎯 Final active pairs:', finalActive.map(p => p.symbol));
 
