@@ -195,13 +195,6 @@ export default function EngineDashboard() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => handleAction('clear-lock')}
-            disabled={actionLoading}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded shadow-lg transition-colors shrink-0 disabled:opacity-50"
-          >
-            🔓 Clear Lock (Manual Override)
-          </button>
         </div>
       )}
 

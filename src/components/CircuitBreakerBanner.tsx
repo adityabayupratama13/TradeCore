@@ -8,6 +8,25 @@ import { useEffect, useState } from "react";
 export function CircuitBreakerBanner() {
   const { status, loading } = useRiskStatus();
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleClearLock = async () => {
+    setActionLoading(true);
+    try {
+      const res = await fetch('/api/risk/clear-lock', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert('✅ Lock cleared! The dashboard will now reload.');
+        window.location.reload();
+      } else {
+        alert('❌ Error clearing lock: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!status?.isLocked || !status.lockedUntil) return;
@@ -55,9 +74,18 @@ export function CircuitBreakerBanner() {
             <div className="font-mono font-bold text-xl text-white">Unlocks in: {timeLeft}</div>
             <div className="text-xs text-[#FF4757]/80">Resumes at: {new Date(status.lockedUntil!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
           </div>
-          <Link href="/journal" className="bg-[#FF4757] text-[#0A0E1A] font-bold px-6 py-2 rounded hover:bg-[#FF4757]/80 transition-colors">
-            Review Journal
-          </Link>
+          <div className="flex flex-col gap-2">
+            <Link href="/journal" className="bg-[#FF4757] text-[#0A0E1A] font-bold px-6 py-2 rounded text-center hover:bg-[#FF4757]/80 transition-colors">
+              Review Journal
+            </Link>
+            <button
+              onClick={handleClearLock}
+              disabled={actionLoading}
+              className="bg-transparent border border-[#FF4757] text-[#FF4757] font-bold px-6 py-2 rounded text-center hover:bg-[#FF4757]/10 transition-colors disabled:opacity-50"
+            >
+              🔓 Clear Lock (Manual Override)
+            </button>
+          </div>
         </div>
       </div>
     );
