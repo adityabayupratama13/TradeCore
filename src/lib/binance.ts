@@ -285,7 +285,7 @@ export async function getOpenOrders(symbol?: string) {
 }
 
 export async function getOpenAlgoOrders(symbol?: string) {
-  return fetchBinance('/fapi/v1/algoOrder/openOrders', 'GET', symbol ? { symbol } : {});
+  return fetchBinance('/fapi/v1/openAlgoOrders', 'GET', symbol ? { symbol } : {});
 }
 
 export async function closePosition(symbol: string, quantity: number) {

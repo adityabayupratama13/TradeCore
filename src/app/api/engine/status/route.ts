@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { getEngineStatus } from '../../../../../src/lib/engineScheduler';
-import { getPositions, getOpenOrders } from '../../../../../src/lib/binance';
+import { getPositions, getOpenAlgoOrders } from '../../../../../src/lib/binance';
 import { SAFE_UNIVERSE } from '../../../../../src/lib/constants';
 
 export async function GET() {
@@ -99,8 +99,8 @@ export async function GET() {
     
     for (const pos of positions) {
       try {
-        const algoOrders = await getOpenOrders(pos.symbol);
-        const hasSL = algoOrders.some((o: any) => o.type === 'STOP_MARKET' || o.type === 'STOP');
+        const algoOrders = await getOpenAlgoOrders(pos.symbol);
+        const hasSL = algoOrders.some((o: any) => o.orderType === 'STOP_MARKET' || o.orderType === 'STOP');
         if (!hasSL) {
           unprotectedPositions.push({ symbol: pos.symbol, direction: pos.positionAmt > 0 ? 'LONG' : 'SHORT' });
         }

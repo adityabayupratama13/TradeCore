@@ -1,4 +1,4 @@
-import { getPositions, getOpenOrders, placeAlgoOrder } from './binance';
+import { getPositions, getOpenAlgoOrders, placeAlgoOrder } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { getCoinCategory } from './coinCategories';
@@ -15,12 +15,12 @@ export async function syncPositions(): Promise<void> {
       if (existing) {
         let hasSL = false;
         try {
-           const openOrders = await getOpenOrders(pos.symbol);
-           const slOrder = openOrders.find((o: any) => o.type === 'STOP_MARKET' || o.type === 'STOP');
+           const openOrders = await getOpenAlgoOrders(pos.symbol);
+           const slOrder = openOrders.find((o: any) => o.orderType === 'STOP_MARKET' || o.orderType === 'STOP');
            if (slOrder) {
                hasSL = true;
-               if (!existing.slAlgoId || existing.slAlgoId !== slOrder.orderId.toString()) {
-                   await prisma.trade.update({ where: { id: existing.id }, data: { slAlgoId: slOrder.orderId.toString() } });
+               if (!existing.slAlgoId || existing.slAlgoId !== slOrder.algoId.toString()) {
+                   await prisma.trade.update({ where: { id: existing.id }, data: { slAlgoId: slOrder.algoId.toString() } });
                }
            }
         } catch(e) {
