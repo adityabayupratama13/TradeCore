@@ -170,6 +170,33 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
 }
 
 export async function runDynamicHunter(): Promise<HunterResult> {
+  const OVERRIDE_ACTIVE = true;  // set false to re-enable hunter
+  
+  if (OVERRIDE_ACTIVE) {
+    const overridePairs = [
+      { symbol: 'BTCUSDT', biasSide: 'NEUTRAL', score: 100 },
+      { symbol: 'ETHUSDT', biasSide: 'NEUTRAL', score: 90 },
+      { symbol: 'SOLUSDT', biasSide: 'NEUTRAL', score: 80 }
+    ];
+    
+    await prisma.appSettings.upsert({
+      where: { key: 'active_trading_pairs' },
+      update: { value: JSON.stringify(overridePairs) },
+      create: { key: 'active_trading_pairs', value: JSON.stringify(overridePairs) }
+    });
+    
+    console.log('🔒 Pair override active: BTC, ETH, SOL only');
+    return {
+       watchlist: overridePairs as any,
+       activePairs: overridePairs as any,
+       scannedAt: new Date(),
+       totalScanned: 3,
+       totalPassed: 3,
+       extremeCount: 0,
+       highCount: 0
+    };
+  }
+
   console.log('🦅 Hunter: Starting scan...');
   console.log('📋 SAFE_UNIVERSE contains:', SAFE_UNIVERSE.size, 'coins');
 

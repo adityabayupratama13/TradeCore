@@ -164,22 +164,40 @@ async function checkTriggersForPair(symbol: string, pair: any) {
      else if (trigger.triggerType === 'SCHEDULED_FALLBACK') cooldownMinutes = 60;
 
      if (minsSinceLLM >= cooldownMinutes) {
-         await prisma.engineLog.create({
-           data: {
-             cycleNumber: 0,
-             symbol,
-             action: 'TRIGGER_FIRED',
-             reason: `Watcher caught ${trigger.triggerType} (Str: ${trigger.strength})`,
-             result: 'DISPATCHING_AI'
-           }
-         });
+         if (trigger.strength < 2) return;
 
+         const closes1h = klines1h.map(k => k.close);
+         const highs1h = klines1h.map(k => k.high);
+         const lows1h = klines1h.map(k => k.low);
+         const adx = calculateADX(highs1h, lows1h, closes1h, 14);
+         const rsi = currRsi;
+         const volumeRatio = currentVol / avgVol;
+
+         if (adx < 20) {
+            console.log(`⏭️ ${symbol} ADX ${adx.toFixed(1)} < 20. No trend. Skip.`);
+            return;
+         }
+         
+         if (rsi > 75 || rsi < 25) {
+            console.log(`⏭️ ${symbol} RSI ${rsi.toFixed(1)} overextended. Skip.`);
+            return;
+         }
+         
+         if (volumeRatio < 1.0) {
+            console.log(`⏭️ ${symbol} Volume ${volumeRatio.toFixed(2)}x below avg. Skip.`);
+            return;
+         }
+
+         console.log(`✅ ${symbol} passed all gates. Dispatching AI.`);
+
+         await prisma.engineLog.create({
+           data: { cycleNumber: 0, symbol, action: 'TRIGGER_FIRED', reason: `Watcher caught ${trigger.triggerType} (Str: ${trigger.strength})`, result: 'DISPATCHING_AI' }
+         });
          await prisma.appSettings.upsert({
            where: { key: cooldownKey },
            update: { value: new Date().toISOString() },
            create: { key: cooldownKey, value: new Date().toISOString() }
          });
-
          await prisma.appSettings.upsert({
             where: { key: `watcher_last_trigger_${symbol}` },
             update: { value: JSON.stringify(trigger) },

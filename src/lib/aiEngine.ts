@@ -494,27 +494,34 @@ ORDERBOOK: BidAsk=${obImbalance}
 SESSION: ${tradingSession}
 RECENT TODAY: ${todaySummary}
 
-TREND ALIGNMENT RULES:
-- 1H trend BULLISH (EMA20 > EMA50 on 1H):
-  → Valid entries: LONG only
-  → Skip all SHORT signals
+ABSOLUTE TREND RULE — NEVER VIOLATE:
+
+1H trend = EMA20 vs EMA50 on 1H chart:
+  BULLISH (EMA20 > EMA50) → ONLY accept LONG
+  BEARISH (EMA20 < EMA50) → ONLY accept SHORT
+
+If your signal direction conflicts with 1H trend:
+  → action: SKIP, no exceptions
   
-- 1H trend BEARISH (EMA20 < EMA50 on 1H):
-  → Valid entries: SHORT only  
-  → Skip all LONG signals
+ONLY exception — confirmed squeeze:
+  ALL of these must be true:
+  1. fundingCategory = EXTREME (not just HIGH)
+  2. OI rising > 3% in last hour
+  3. confidence >= 88 BEFORE any adjustment
+  4. Price at key support/resistance level
+  
+  If squeeze confirmed AND against trend:
+    → Reduce confidence by 20 points
+    → Only proceed if adjusted confidence >= 75
 
-BIAS ALIGNMENT:
-- biasSide = PREFER_SHORT means: funding shows longs overcrowded
-  → Strongly consider SHORT entries
-  → If 1H also BEARISH → HIGH CONVICTION SHORT ✅
-  → If 1H BULLISH → conflict, reduce confidence, may still SHORT
+IN PRACTICE:
+  BEARISH 1H + PREFER_LONG bias:
+    → Usually SKIP (trend wins over funding)
+    → Only LONG if squeeze score perfect
 
-- biasSide = PREFER_LONG means: funding shows shorts overcrowded
-  → Strongly consider LONG entries
-  → If 1H also BULLISH → HIGH CONVICTION LONG ✅
-  → If 1H BEARISH → conflict, reduce confidence, may still LONG
-
-- biasSide = NEUTRAL → follow technicals only
+  BULLISH 1H + PREFER_SHORT bias:
+    → Usually SKIP (trend wins over funding)
+    → Only SHORT if squeeze score perfect
 
 ENTRY RULES:
 - Entry on 15m confirmation

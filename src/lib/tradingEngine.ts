@@ -241,44 +241,52 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
         }
     }
 
-    const startOfDay = new Date(new Date().setHours(0,0,0,0));
-    const todayTrades = await prisma.trade.findMany({ where: { entryAt: { gte: startOfDay } } });
-    let wins = 0, losses = 0;
-    todayTrades.forEach((t: any) => {
-       if (t.status === 'CLOSED' && t.exitPrice) {
-          const p = t.pnlPct || ((t.direction === 'LONG' ? (t.exitPrice - t.entryPrice) : (t.entryPrice - t.exitPrice)) / t.entryPrice) * (t.leverage || 1) * 100;
-          if (p >= 0) wins++; else losses++;
-       }
+    const nowWIB = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    const startOfDayWIB = new Date(nowWIB.getFullYear(), nowWIB.getMonth(), nowWIB.getDate());
+    startOfDayWIB.setHours(startOfDayWIB.getHours() - 7); // Back to UTC
+
+    const tradesTodayCount = await prisma.trade.count({
+      where: {
+        entryAt: { gte: startOfDayWIB },
+        status: { not: 'CANCELLED' }
+      }
     });
 
-    const totalTradesToday = todayTrades.length;
-    const closedCount = wins + losses;
-    const winRate = closedCount > 0 ? (wins / closedCount) * 100 : 100;
+    const DAILY_SAFETY_LIMIT = 6;
+    if (tradesTodayCount >= DAILY_SAFETY_LIMIT) {
+      console.log(`🛑 Daily safety limit ${DAILY_SAFETY_LIMIT} reached. Skipping.`);
+      return;
+    }
+
+    if (tradesTodayCount >= 4) {
+      const wins = await prisma.trade.count({
+        where: {
+          entryAt: { gte: startOfDayWIB },
+          status: 'CLOSED',
+          pnl: { gt: 0 }
+        }
+      });
+      const winRate = wins / tradesTodayCount;
+      
+      if (winRate < 0.30) {
+        console.log(`🛑 Win rate ${(winRate*100).toFixed(0)}% critical. No more trades today.`);
+        const alertedSetting = await prisma.appSettings.findUnique({ where: { key: `winrate_brake_${startOfDayWIB.getTime()}` } });
+        if (!alertedSetting) {
+             await sendTelegramAlert({
+               type: 'RAW_MESSAGE',
+               data: { text: `⚠️ WIN RATE BRAKE ACTIVATED\nToday: ${wins}W / ${tradesTodayCount} trades\nWin rate: ${(winRate*100).toFixed(1)}%\nNo more entries until tomorrow.\nReview market conditions.` }
+             } as any);
+             await prisma.appSettings.upsert({
+                where: { key: `winrate_brake_${startOfDayWIB.getTime()}` },
+                update: { value: 'TRUE' },
+                create: { key: `winrate_brake_${startOfDayWIB.getTime()}`, value: 'TRUE' }
+             });
+        }
+        return;
+      }
+    }
 
     let dynamicMinConf = Math.max(riskRule?.minConfidence ?? 70, 70);
-
-    if (totalTradesToday >= 8 && winRate < 50) {
-        console.log(`⏸️ Engine paused: 8 trades reached with ${winRate.toFixed(1)}% win rate. Engine pausing for 2 hours cooldown.`);
-        await prisma.appSettings.upsert({
-           where: { key: 'engine_pause_until' },
-           update: { value: (Date.now() + 2 * 3600 * 1000).toString() },
-           create: { key: 'engine_pause_until', value: (Date.now() + 2 * 3600 * 1000).toString() }
-        });
-        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⏸️ Engine paused: 8 trades, win rate too low (${winRate.toFixed(1)}%). Review market conditions.` } } as any);
-        return;
-    } else if (totalTradesToday >= 5 && winRate < 40) {
-        dynamicMinConf = Math.max(dynamicMinConf, 80);
-        const alertedSetting = await prisma.appSettings.findUnique({ where: { key: `winrate_alert_${startOfDay.getTime()}` } });
-        if (!alertedSetting) {
-            console.log("⚠️ Low win rate detected. Raising confidence bar.");
-            await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⚠️ Win rate below 40% today (${winRate.toFixed(1)}%). Tightening entry criteria to 80% confidence.` } } as any);
-            await prisma.appSettings.upsert({
-               where: { key: `winrate_alert_${startOfDay.getTime()}` },
-               update: { value: 'TRUE' },
-               create: { key: `winrate_alert_${startOfDay.getTime()}`, value: 'TRUE' }
-            });
-        }
-    }
 
     const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
     let activePairs = [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
@@ -394,6 +402,38 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     const { quantity, margin, leverage, liqPrice, adjustedSl } = positionDetails;
     signal.stopLoss = adjustedSl;
     signal.leverage = leverage;
+
+    const positionValue = margin * leverage;
+    const riskAmount = Math.abs(signal.entryPrice - signal.stopLoss) * quantity;
+    const riskPct = ((riskAmount / totalWalletBalance) * 100).toFixed(2);
+    const lvStr = leverage.toString();
+
+    console.log(`
+╔═══════════════════════════════╗
+║     PRE-TRADE VALIDATION      ║
+╠═══════════════════════════════╣
+║ Symbol:   ${signal.symbol.padEnd(20)}║
+║ USDT Bal: $${availableBalance.toFixed(2).padEnd(19)}║
+║ Risk:     ${riskPct}% = $${riskAmount.toFixed(2).padEnd(13)}║
+║ Position: $${positionValue.toFixed(2).padEnd(19)}║
+║ Margin:   $${margin.toFixed(2).padEnd(19)}║
+║ Leverage: ${lvStr}x${' '.repeat(20 - lvStr.length)}║
+╚═══════════════════════════════╝`);
+
+    if (availableBalance < 1) {
+      console.error('❌ Balance < $1. Cannot trade.');
+      return;
+    }
+
+    if (positionValue > availableBalance * 15) {
+      console.error(`❌ Position $${positionValue.toFixed(2)} > 15x balance. BLOCKED.`);
+      return;
+    }
+
+    if (margin > availableBalance * 0.40) {
+      console.error(`❌ Margin $${margin.toFixed(2)} > 40% balance. BLOCKED.`);
+      return;
+    }
 
     // NEW FIX 4: TP MINIMUM 15% ENFORCE
     signal = enforceMinProfitTarget(signal, margin * leverage, totalWalletBalance, riskRule?.minProfitTargetPct ?? 15);
