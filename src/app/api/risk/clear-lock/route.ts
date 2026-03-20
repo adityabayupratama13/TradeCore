@@ -22,6 +22,12 @@ export async function POST() {
       }
     });
 
+    await prisma.appSettings.upsert({
+      where: { key: 'daily_loss_pct' },
+      update: { value: '0' },
+      create: { key: 'daily_loss_pct', value: '0' }
+    });
+
     return NextResponse.json({ success: true, message: 'Lock cleared & daily counter reset' });
   } catch (error) {
     console.error('Clear lock error:', error);

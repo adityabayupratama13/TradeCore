@@ -21,7 +21,13 @@ async function main() {
     }
   });
 
-  console.log('✅ Lock cleared + daily counter reset');
+  await prisma.appSettings.upsert({
+    where: { key: 'daily_loss_pct' },
+    update: { value: '0' },
+    create: { key: 'daily_loss_pct', value: '0' }
+  });
+
+  console.log('✅ Lock cleared + daily counter reset. Engine ready.');
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
