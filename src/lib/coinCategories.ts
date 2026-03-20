@@ -22,7 +22,7 @@ export const COIN_CATEGORIES: CoinCategory[] = [
       'SOLUSDT','XRPUSDT','ADAUSDT','AVAXUSDT',
       'DOTUSDT','LINKUSDT','LTCUSDT','UNIUSDT',
       'ATOMUSDT','NEARUSDT','APTUSDT','INJUSDT',
-      'ARBUSDT','OPUSDT','SUIUSDT'
+      'ARBUSDT','OPUSDT','SUIUSDT','HYPEUSDT'
     ],
     leverage: 20,
     maxLeverage: 30,

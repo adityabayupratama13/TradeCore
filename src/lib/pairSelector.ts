@@ -173,25 +173,27 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   const OVERRIDE_ACTIVE = true;  // set false to re-enable hunter
   
   if (OVERRIDE_ACTIVE) {
-    const overridePairs = [
-      { symbol: 'BTCUSDT', biasSide: 'NEUTRAL', score: 100 },
-      { symbol: 'ETHUSDT', biasSide: 'NEUTRAL', score: 90 },
-      { symbol: 'SOLUSDT', biasSide: 'NEUTRAL', score: 80 }
+    const ACTIVE_PAIRS_OVERRIDE = [
+      { symbol: 'BTCUSDT',  biasSide: 'NEUTRAL', score: 100 },
+      { symbol: 'ETHUSDT',  biasSide: 'NEUTRAL', score: 90 },
+      { symbol: 'SOLUSDT',  biasSide: 'NEUTRAL', score: 80 },
+      { symbol: 'DOGEUSDT', biasSide: 'NEUTRAL', score: 70 },
+      { symbol: 'HYPEUSDT', biasSide: 'NEUTRAL', score: 60 }
     ];
     
     await prisma.appSettings.upsert({
       where: { key: 'active_trading_pairs' },
-      update: { value: JSON.stringify(overridePairs) },
-      create: { key: 'active_trading_pairs', value: JSON.stringify(overridePairs) }
+      update: { value: JSON.stringify(ACTIVE_PAIRS_OVERRIDE) },
+      create: { key: 'active_trading_pairs', value: JSON.stringify(ACTIVE_PAIRS_OVERRIDE) }
     });
     
-    console.log('🔒 Pair override active: BTC, ETH, SOL only');
+    console.log('✅ Active pairs updated:', ACTIVE_PAIRS_OVERRIDE.map(p => p.symbol).join(', '));
     return {
-       watchlist: overridePairs as any,
-       activePairs: overridePairs as any,
+       watchlist: ACTIVE_PAIRS_OVERRIDE as any,
+       activePairs: ACTIVE_PAIRS_OVERRIDE as any,
        scannedAt: new Date(),
-       totalScanned: 3,
-       totalPassed: 3,
+       totalScanned: 5,
+       totalPassed: 5,
        extremeCount: 0,
        highCount: 0
     };
