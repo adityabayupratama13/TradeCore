@@ -23,7 +23,7 @@ export async function GET() {
     if (activePairsSetting?.value) {
       try {
         const parsed = JSON.parse(activePairsSetting.value);
-        activeSymbols = parsed.map((p: any) => p.symbol).filter((s: string) => SAFE_UNIVERSE.has(s));
+        activeSymbols = parsed.map((p: any) => p.symbol);
       } catch (e) {}
     }
 

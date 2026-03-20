@@ -364,11 +364,7 @@ async function checkSufficientMargin(requiredMargin: number): Promise<boolean> {
 async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any) {
     const symbol = signal.symbol;
 
-    // ABSOLUTE FIRST CHECK — NON-NEGOTIABLE
-    if (!SAFE_UNIVERSE.has(symbol)) {
-      console.log(`🚫 BLOCKED: ${symbol} not in SAFE_UNIVERSE. Skipping.`);
-      return;
-    }
+    // ABSOLUTE FIRST CHECK — Removed SAFE_UNIVERSE check for 100% organic operation
 
     const startOfDayWIB = new Date();
     startOfDayWIB.setHours(0, 0, 0, 0);

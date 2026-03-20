@@ -237,9 +237,7 @@ export function calculateVolumeProfile(volumes: number[]): { avg: number, curren
 // ----------------------------------------------------
 
 export async function analyzeMarket(symbol: string, triggerData: any = null, activeMode: string = 'SAFE'): Promise<TradeSignal> {
-  if (!SAFE_UNIVERSE.has(symbol)) {
-    return { action: 'SKIP', symbol, confidence: 0, reasoning: 'Not in SAFE_UNIVERSE', entryPrice: 0, stopLoss: 0, takeProfit: 0, leverage: 1, riskReward: 0, keySignal: 'NONE', analyzedAt: new Date() };
-  }
+  // Removed SAFE_UNIVERSE check. AI is completely unleashed organically!
 
   const [
     klines15m,

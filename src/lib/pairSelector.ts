@@ -221,19 +221,16 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   allTickers.forEach((t: any) => {
     const f = fundingMap[t.symbol];
     if (f) {
-      if (SAFE_UNIVERSE.has(t.symbol)) {
-        rawPairs.push({
-          symbol: t.symbol,
-          fundingRate: parseFloat(f.lastFundingRate),
-          markPrice: parseFloat(f.markPrice),
-          volume24h: parseFloat(t.quoteVolume),
-          priceChange24h: parseFloat(t.priceChangePercent),
-          highPrice24h: parseFloat(t.highPrice),
-          lowPrice24h: parseFloat(t.lowPrice)
-        });
-      } else {
-        blocked.push({...t, fundingRate: parseFloat(f.lastFundingRate)});
-      }
+      // 100% ORGANIC SEARCH: Accept ALL coins, abandon hardcoded universes
+      rawPairs.push({
+        symbol: t.symbol,
+        fundingRate: parseFloat(f.lastFundingRate),
+        markPrice: parseFloat(f.markPrice),
+        volume24h: parseFloat(t.quoteVolume),
+        priceChange24h: parseFloat(t.priceChangePercent),
+        highPrice24h: parseFloat(t.highPrice),
+        lowPrice24h: parseFloat(t.lowPrice)
+      });
     }
   });
 

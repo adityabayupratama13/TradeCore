@@ -23,8 +23,8 @@ async function getActivePairsForWatching() {
     } catch (e) {}
   }
   
-  // Extra safety: filter again
-  const safePairs = pairs.filter((p: any) => SAFE_UNIVERSE.has(p.symbol));
+  // Extra safety: disabled to allow organic selection
+  const safePairs = pairs;
   
   // If less than 3 safe pairs, use fallback
   if (safePairs.length < 3) {
@@ -65,7 +65,7 @@ export async function runPriceWatcher(): Promise<void> {
 }
 
 async function checkTriggersForPair(symbol: string, pair: any) {
-  if (!SAFE_UNIVERSE.has(symbol)) return;
+  // Removed SAFE_UNIVERSE static boundary entirely
 
   const [klines15m, klines1h, markPriceObj] = await Promise.all([
     getKlines(symbol, '15m', 50),

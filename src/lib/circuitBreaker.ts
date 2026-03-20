@@ -126,10 +126,12 @@ async function calculateMetrics(
       }
     });
 
-    for (const sym of SAFE_UNIVERSE) {
-      try {
-        await cancelAllOrders(sym);
-      } catch (err) { }
+    const activeSetting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+    if (activeSetting?.value) {
+      const activePairs = JSON.parse(activeSetting.value);
+      for (const pair of activePairs) {
+        try { await cancelAllOrders(pair.symbol); } catch (err) { }
+      }
     }
     
     await sendTelegramAlert({
