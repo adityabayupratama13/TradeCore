@@ -3,7 +3,7 @@ import { getPositions, closePosition } from './binance';
 import { startEngine, stopEngine, getEngineStatus } from './engineScheduler';
 
 interface TelegramMessage {
-  type: 'LOCK' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED';
+  type: 'LOCK' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED' | 'MODE_CHANGED';
   data: Record<string, any>;
 }
 
@@ -70,6 +70,9 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
       case 'PAIRS_UPDATED':
         text = `🦅 DYNAMIC HUNTER — HOURLY UPDATE\n━━━━━━━━━━━━━━━━━━━\n⚡ ACTIVE PAIRS:\n${d.activePairs.map((p: any, i: number) => 
 `${i+1}. ${p.symbol}\n   Funding: ${(p.fundingRate*100).toFixed(4)}% ${p.fundingCategory}\n   OI: ${p.oiValue} (${p.oiChange1h} 1h)\n   Signal: ${p.oiSignal?.type || 'UNKNOWN'}\n   Smart Money: ${p.oiData?.topTraderLsRatio > 1.2 ? '🟢 Long' : p.oiData?.topTraderLsRatio < 0.8 ? '🔴 Short' : '⚪ Neutral'}\n   Bias: ${p.biasSide}`).join('\n')}\n━━━━━━━━━━━━━━━━━━━`;
+        break;
+      case 'MODE_CHANGED':
+        text = `🔄 TRADING MODE CHANGED\n${d.badge}\n━━━━━━━━━━━━━━\n${d.description}\n━━━━━━━━━━━━━━\nNew settings:\nRisk/trade: ${d.settings?.riskPctLargeCap}% (BTC)\nLeverage: ${d.settings?.leverageLargeCap}x (BTC)\nMax positions: ${d.settings?.maxOpenPositions}\nMin confidence: ${d.settings?.minConfidence}%\n━━━━━━━━━━━━━━\nEngine adapts immediately.`;
         break;
       case 'RAW_MESSAGE':
         text = d.text;

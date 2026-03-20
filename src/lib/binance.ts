@@ -383,7 +383,11 @@ export async function fetchOIDataRaw(symbol: string) {
         console.warn(`[Binance OI] Warning: ${url} returned ${res.status}`);
         return null;
       }
-      return res.json();
+      const text = await res.text();
+      if (text.trim() === 'ok') {
+        return null;
+      }
+      return JSON.parse(text);
     } catch (err: any) {
       console.error(`[Binance OI] Fetch failed for ${url}:`, err.message);
       return null;

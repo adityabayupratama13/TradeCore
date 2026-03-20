@@ -243,16 +243,18 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       return;
     }
 
-    console.log(`🔍 Analyzing ${availablePairs.length} pairs simultaneously...`);
+    console.log(`🔍 Analyzing ${availablePairs.length} pairs simultaneously... (Mode: ${riskRule?.activeMode || 'SAFE'})`);
     const signals = await Promise.all(
-      availablePairs.map((pair: any) => analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null))
+      availablePairs.map((pair: any) => analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE'))
     );
 
+    const minConf = riskRule?.minConfidence ?? 65;
+
     const validSignals = signals
-      .filter(s => s.action !== 'SKIP' && s.confidence >= 55)
+      .filter(s => s.action !== 'SKIP' && s.confidence >= minConf)
       .sort((a, b) => b.confidence - a.confidence);
 
-    console.log(`✅ Valid signals: ${validSignals.length}. Executing up to ${availableSlots}...`);
+    console.log(`✅ Valid signals: ${validSignals.length} (>=${minConf}%). Executing up to ${availableSlots}...`);
 
     for (let i = 0; i < Math.min(validSignals.length, availableSlots); i++) {
         await executeTradeSignal(validSignals[i], portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule);

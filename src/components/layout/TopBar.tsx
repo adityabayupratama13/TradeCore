@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getModeConfig } from "@/lib/tradingModes";
 
 // Helper to determine day of week and hour
 const checkMarketStatus = () => {
@@ -27,7 +28,8 @@ export function TopBar() {
     todayPnl: 0,
     todayPnlPct: 0,
     drawdownPct: 0,
-    riskStatus: 'SAFE'
+    riskStatus: 'SAFE',
+    activeMode: 'SAFE'
   });
 
   useEffect(() => {
@@ -50,7 +52,8 @@ export function TopBar() {
         todayPnl: perf?.dailyPnl || 0,
         todayPnlPct: perf?.winRate || 0, // Using win rate as placeholder if pct not available
         drawdownPct: risk?.drawdownPct || 0,
-        riskStatus: risk?.status || 'SAFE'
+        riskStatus: risk?.status || 'SAFE',
+        activeMode: risk?.rules?.activeMode || 'SAFE'
       });
     }).catch(console.error);
   }, []);
@@ -73,6 +76,8 @@ export function TopBar() {
     }
     return "TradeCore";
   };
+
+  const activeModeData = getModeConfig(statusData.activeMode);
 
   return (
     <div className="fixed top-0 left-[240px] right-0 h-16 bg-[#0E1628]/95 backdrop-blur z-10 border-b border-[#1a2540] flex items-center justify-between px-6">
@@ -113,6 +118,20 @@ export function TopBar() {
               className={`h-full ${statusData.drawdownPct > 10 ? 'bg-[#FF4757]' : 'bg-[#FFA502]'}`}
               style={{ width: `${Math.min(statusData.drawdownPct, 100)}%` }}
             />
+          </div>
+        </div>
+
+        <div className="w-[1px] h-8 bg-[#1a2540]" />
+
+        {/* Trading Mode */}
+        <div className="flex flex-col text-right cursor-pointer" onClick={() => window.location.href='/risk'}>
+          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Mode</span>
+          <div className="text-[11px] px-2 py-0.5 mt-0.5 rounded font-bold tracking-widest text-center" 
+               style={{ 
+                 color: activeModeData.color, 
+                 backgroundColor: activeModeData.color + '20' 
+               }}>
+            {activeModeData.badge}
           </div>
         </div>
 

@@ -235,7 +235,7 @@ export function calculateVolumeProfile(volumes: number[]): { avg: number, curren
 // AI ANALYSIS ENGINE
 // ----------------------------------------------------
 
-export async function analyzeMarket(symbol: string, triggerData: any = null): Promise<TradeSignal> {
+export async function analyzeMarket(symbol: string, triggerData: any = null, activeMode: string = 'SAFE'): Promise<TradeSignal> {
   const [
     klines15m,
     klines1h,
@@ -456,6 +456,14 @@ ENTRY RULES FOR THIS PAIR:
 
   const prompt = `Crypto futures day trader. Analyze ${symbol} for intraday trade.
 Goal: catch moves completing within 2-8 hours.
+
+TRADING MODE: ${activeMode}
+${activeMode === 'SAFE' 
+  ? 'Be conservative. Only highest quality setups.' 
+  : activeMode === 'DEGEN'
+  ? 'Be aggressive. Take high conviction setups. Profit maximization.'
+  : 'Balanced approach.'}
+
 ${triggerContext}
 PRICE: ${markPriceObj.markPrice} | 24h: ${ticker.priceChangePercent}% | Vol: ${vol_15m.ratio.toFixed(2)}x avg
 

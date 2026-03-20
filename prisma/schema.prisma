@@ -55,9 +55,12 @@ model TradeJournal {
 }
 
 model RiskRule {
-  id                  String   @id @default(cuid())
-  maxDailyLossPct     Float    @default(30)
-  maxWeeklyLossPct    Float    @default(50)
+  id                  String      @id @default(cuid())
+
+  activeMode          String      @default("SAFE") // SAFE, BALANCED, AGGRESSIVE, DEGEN
+
+  maxDailyLossPct     Float       @default(30)
+  maxWeeklyLossPct    Float       @default(50)
   maxDrawdownPct      Float    @default(70)
   maxPositionSizePct  Float    @default(10)
   maxRiskPerTradePct  Float    @default(2)
@@ -76,6 +79,7 @@ model RiskRule {
   maxLeverageLarge    Int      @default(70)
   maxLeverageMid      Int      @default(30)
   maxLeverageLow      Int      @default(30)
+  minConfidence       Int      @default(65)
 }
 
 model RiskEvent {

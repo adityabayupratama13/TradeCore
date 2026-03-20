@@ -18,17 +18,13 @@ export default function RiskPage() {
       {/* ROW 1: LIVE RISK METERS */}
       <RiskMeters />
 
-      {/* ROW 2: RULES (Left 40%) & EXPOSURE (Right 60%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      {/* ROW 2: TRADING MODE SELECTOR & RISK MANAGEMENT */}
+      <div className="flex flex-col gap-6">
+        <RiskRulesForm />
         
-        <div className="lg:col-span-2">
-          <RiskRulesForm />
-        </div>
-
-        <div className="lg:col-span-3">
+        <div className="w-full">
           <PositionExposureTable />
         </div>
-
       </div>
 
       {/* ROW 3: RISK HISTORY LOG (Full Width) */}

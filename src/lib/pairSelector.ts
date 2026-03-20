@@ -184,34 +184,42 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   const fundingMap: Record<string, any> = {};
   allFundingRates.forEach((f: any) => { fundingMap[f.symbol] = f; });
 
+  // LINE 1 — ABSOLUTE FIRST FILTER
+  // If not in SAFE_UNIVERSE → does not exist
   const rawPairs: PairData[] = [];
+  const blocked: any[] = [];
+  
   allTickers.forEach((t: any) => {
     const f = fundingMap[t.symbol];
     if (f) {
-      rawPairs.push({
-        symbol: t.symbol,
-        fundingRate: parseFloat(f.lastFundingRate),
-        markPrice: parseFloat(f.markPrice),
-        volume24h: parseFloat(t.quoteVolume),
-        priceChange24h: parseFloat(t.priceChangePercent),
-        highPrice24h: parseFloat(t.highPrice),
-        lowPrice24h: parseFloat(t.lowPrice)
-      });
+      if (SAFE_UNIVERSE.has(t.symbol)) {
+        rawPairs.push({
+          symbol: t.symbol,
+          fundingRate: parseFloat(f.lastFundingRate),
+          markPrice: parseFloat(f.markPrice),
+          volume24h: parseFloat(t.quoteVolume),
+          priceChange24h: parseFloat(t.priceChangePercent),
+          highPrice24h: parseFloat(t.highPrice),
+          lowPrice24h: parseFloat(t.lowPrice)
+        });
+      } else {
+        blocked.push({...t, fundingRate: parseFloat(f.lastFundingRate)});
+      }
     }
   });
 
-  // IMMEDIATE FILTER — before anything else
-  const safePairs = rawPairs.filter(p => {
-    const isSafe = SAFE_UNIVERSE.has(p.symbol);
-    if (!isSafe) {
-      if (Math.abs(p.fundingRate) > 0.001) {
-        console.log(`🚫 Blocked: ${p.symbol} (${(p.fundingRate * 100).toFixed(4)}%) not in SAFE_UNIVERSE`);
-      }
-    }
-    return isSafe;
-  });
+  const safePairs = rawPairs;
+  console.log(`🔒 SAFE filter: ${allTickers.length} → ${safePairs.length} pairs`);
   
-  console.log(`Hunter: ${rawPairs.length} total → ${safePairs.length} safe pairs`);
+  // Verify dangerous coins are blocked
+  if (blocked.some(p => Math.abs(p.fundingRate) > 0.001)) {
+    console.log('🚫 Blocked dangerous coins:', 
+      blocked
+        .filter(p => Math.abs(p.fundingRate) > 0.001)
+        .map(p => `${p.symbol}(${p.fundingRate})`)
+        .join(', ')
+    )
+  }
 
   const totalScanned = rawPairs.length;
   
@@ -350,34 +358,48 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   );
 
   const finalActive: ScoredPair[] = [];
-  let shortHeavyCount = 0;
-  let longHeavyCount = 0;
-
-  for (const p of eligibleActive) {
+  
+  // Add top scored eligible pairs first (max 5)
+  for (const p of scoredPairs) {
     if (finalActive.length >= 5) break;
-    
-    if (p.biasSide === 'PREFER_SHORT' && shortHeavyCount >= 2) continue;
-    if (p.biasSide === 'PREFER_LONG' && longHeavyCount >= 2) continue;
-    
-    if (p.biasSide === 'PREFER_SHORT') shortHeavyCount++;
-    if (p.biasSide === 'PREFER_LONG') longHeavyCount++;
-    
     finalActive.push({ ...p, tier: 'ACTIVE' });
   }
 
-  // If we don't naturally find 5, pad with SAFEST large caps
-  const FALLBACKS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+  // If we don't naturally find 5, pad with SAFEST large caps (guaranteed objects)
+  const FALLBACKS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT'];
   if (finalActive.length < 5) {
-     for (const fb of FALLBACKS) {
+     for (const symbol of FALLBACKS) {
        if (finalActive.length >= 5) break; 
-       if (!finalActive.find(s => s.symbol === fb)) {
-          const p = scoredPairs.find(x => x.symbol === fb);
-          if (p) {
-             finalActive.push({ ...p, tier: 'ACTIVE' });
-          }
+       if (!finalActive.some(s => s.symbol === symbol)) {
+          finalActive.push({
+             symbol,
+             fundingRate: 0,
+             markPrice: 0,
+             volume24h: 100000000,
+             priceChange24h: 0,
+             highPrice24h: 0,
+             lowPrice24h: 0,
+             absFundingRate: 0,
+             fundingCategory: 'NORMAL',
+             direction: 'NEUTRAL',
+             biasSide: 'NEUTRAL',
+             squeezeRisk: 'LOW',
+             score: 0,
+             tier: 'ACTIVE',
+             oiData: {
+                symbol, currentOI: 0, currentOIValue: 0, oiChange1h: 0, oiChange4h: 0, oiChange24h: 0,
+                oiTrend: 'STABLE', oiMomentum: 0, longRatio: 0.5, shortRatio: 0.5, lsRatio: 1, topTraderLsRatio: 1,
+                takerBuyRatio: 0.5, takerSellRatio: 0.5, oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' }
+             },
+             oiSignal: { type: 'NEUTRAL', strength: 1, direction: 'NEUTRAL', description: 'Fallback signal' },
+             oiValue: '—',
+             oiChange1h: 'N/A'
+          });
        }
      }
   }
+  
+  console.log('🎯 Final active pairs:', finalActive.map(p => p.symbol));
 
   await prisma.appSettings.upsert({
     where: { key: 'active_trading_pairs' },
