@@ -96,8 +96,8 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
   }
 }
 
-let lastUpdateId = 0;
-let telegramListenerTimer: NodeJS.Timeout | null = null;
+var lastUpdateId = 0;
+var telegramListenerTimer: NodeJS.Timeout | null = null;
 
 export async function startTelegramListener() {
    if (telegramListenerTimer) return;

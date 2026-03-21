@@ -252,39 +252,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       }
     });
 
-    const DAILY_SAFETY_LIMIT = 6;
-    if (tradesTodayCount >= DAILY_SAFETY_LIMIT) {
-      console.log(`🛑 Daily safety limit ${DAILY_SAFETY_LIMIT} reached. Skipping.`);
-      return;
-    }
-
-    if (tradesTodayCount >= 4) {
-      const wins = await prisma.trade.count({
-        where: {
-          entryAt: { gte: startOfDayWIB },
-          status: 'CLOSED',
-          pnl: { gt: 0 }
-        }
-      });
-      const winRate = wins / tradesTodayCount;
-      
-      if (winRate < 0.30) {
-        console.log(`🛑 Win rate ${(winRate*100).toFixed(0)}% critical. No more trades today.`);
-        const alertedSetting = await prisma.appSettings.findUnique({ where: { key: `winrate_brake_${startOfDayWIB.getTime()}` } });
-        if (!alertedSetting) {
-             await sendTelegramAlert({
-               type: 'RAW_MESSAGE',
-               data: { text: `⚠️ WIN RATE BRAKE ACTIVATED\nToday: ${wins}W / ${tradesTodayCount} trades\nWin rate: ${(winRate*100).toFixed(1)}%\nNo more entries until tomorrow.\nReview market conditions.` }
-             } as any);
-             await prisma.appSettings.upsert({
-                where: { key: `winrate_brake_${startOfDayWIB.getTime()}` },
-                update: { value: 'TRUE' },
-                create: { key: `winrate_brake_${startOfDayWIB.getTime()}`, value: 'TRUE' }
-             });
-        }
-        return;
-      }
-    }
+    // Daily limits and win rate brake removed by user request
 
     let dynamicMinConf = Math.max(riskRule?.minConfidence ?? 70, 70);
 
@@ -303,10 +271,20 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       return;
     }
 
-    console.log(`🔍 Analyzing ${availablePairs.length} pairs simultaneously... (Mode: ${riskRule?.activeMode || 'SAFE'})`);
-    const signals = await Promise.all(
-      availablePairs.map((pair: any) => analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE'))
-    );
+    console.log(`🔍 Analyzing ${availablePairs.length} pairs concurrently via AI... (Mode: ${riskRule?.activeMode || 'SAFE'})`);
+    
+    // DECOUPLED: Run all AI thinking in PARALLEL (Super Fast, No DB locking!)
+    const aiPromises = availablePairs.map(async (pair: any) => {
+        try {
+            return await analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE');
+        } catch (err: any) {
+            console.error(`[Engine] Error analyzing ${pair.symbol}:`, err.message);
+            return null;
+        }
+    });
+
+    const results = await Promise.all(aiPromises);
+    const signals: any[] = results.filter(s => s !== null);
 
     const minConf = 75; // hard minimum regardless of mode
 
@@ -376,10 +354,7 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
       }
     });
     
-    if (tradesToday >= 6) {
-      console.log(`🛑 Daily safety limit: 6 reached (${tradesToday}). Skipping.`);
-      return;
-    }
+    // Check bypassed
 
     await prisma.tradeSignalHistory.create({
       data: {

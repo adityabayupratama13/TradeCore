@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    instrumentationHook: true,
-  },
+  allowedDevOrigins: ['10.0.2.212', 'localhost'],
 };
 
 export default nextConfig;

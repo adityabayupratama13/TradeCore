@@ -25,11 +25,20 @@ export function useBinanceFutures(targetSymbols: string[]) {
   const fetchData = useCallback(async () => {
     try {
       // 1. Fetch funding rates
-      const premiumRes = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex');
+      const premiumRes = await fetch('/api/market/premium-index');
+      if (!premiumRes.ok) {
+        console.error('premium-index returned:', premiumRes.status);
+        return;
+      }
       const premiumJson = await premiumRes.json();
       
       const newFuturesData: Record<string, FuturesData> = {};
       const targetUpper = targetSymbols.map(s => s.toUpperCase());
+      
+      if (!Array.isArray(premiumJson) || premiumJson.length === 0) {
+        console.warn('premiumJson empty or not array');
+        return;
+      }
       
       premiumJson.forEach((item: any) => {
         if (targetUpper.includes(item.symbol)) {
@@ -45,8 +54,17 @@ export function useBinanceFutures(targetSymbols: string[]) {
       setFuturesData(newFuturesData);
 
       // 2. Fetch 24h ticker for volumes and sentiment
-      const tickerRes = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+      const tickerRes = await fetch('/api/market/ticker24hr');
+      if (!tickerRes.ok) {
+        console.error('ticker24hr returned:', tickerRes.status);
+        return;
+      }
       const tickerJson = await tickerRes.json();
+
+      if (!Array.isArray(tickerJson) || tickerJson.length === 0) {
+        console.warn('tickerJson empty or not array');
+        return;
+      }
 
       // Top 20 USDT pairs by quote volume
       const usdtPairs = tickerJson

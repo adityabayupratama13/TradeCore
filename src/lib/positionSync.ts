@@ -67,7 +67,28 @@ export async function syncPositions(): Promise<void> {
           }
         });
       } else {
-        // Unknown manual position? We could integrate it, but for autonomy, we skip unless it originated from us.
+        console.log(`[PosSync] Adopting orphaned/manual position ${pos.symbol} into DB`);
+        try {
+            let portfolio = await prisma.portfolio.findFirst();
+            if (!portfolio) {
+                portfolio = await prisma.portfolio.create({ data: { name: 'Main Portfolio', totalCapital: 1000, currency: 'USD' } });
+            }
+            await prisma.trade.create({
+              data: {
+                portfolioId: portfolio.id,
+                symbol: pos.symbol,
+                direction: pos.positionAmt > 0 ? "LONG" : "SHORT",
+                entryPrice: pos.entryPrice,
+                quantity: Math.abs(pos.positionAmt),
+                leverage: pos.leverage,
+                status: "OPEN",
+                marketType: "FUTURES",
+              }
+            });
+            console.log(`[PosSync] Successfully adopted ${pos.symbol}`);
+        } catch(e) {
+            console.error(`[PosSync] Failed to adopt position ${pos.symbol}`, e);
+        }
       }
     }
 
