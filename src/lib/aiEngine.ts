@@ -460,7 +460,7 @@ ENTRY RULES FOR THIS PAIR:
 - Primary bias: ${biasSide}
 - Override bias ONLY if technicals strongly disagree (ADX > 30 opposite direction)
 - ${squeezeRisk === 'HIGH' ? 
-    'CAUTION: Lower volume pair. Use tighter SL (0.8x ATR). Reduce position size 50%.' : 
+    'CAUTION: Lower volume pair. Use wider SL (1.2x ATR). Reduce position size 50%.' : 
     'Normal position sizing allowed.'}`;
     }
   }
@@ -507,7 +507,7 @@ If there is a conflict → SKIP, period.
 
 ENTRY RULES:
 - Entry on 15m confirmation
-- Stop loss: 1x ATR from entry
+- Stop loss: 1.5x ATR from entry
 - Take profit: 2x ATR minimum (R/R >= 1:2)
 - Max hold: 8 hours
 - Category: ${coinCat.name}
