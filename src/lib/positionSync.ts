@@ -4,8 +4,16 @@ import { sendTelegramAlert } from './telegram';
 import { getCoinCategory } from './coinCategories';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
 
+let isSyncing = false;
+let lastSyncTime = 0;
+
 export async function syncPositions(): Promise<void> {
+  if (isSyncing) return;
+  if (Date.now() - lastSyncTime < 10000) return; // Prevent spamming within 10 seconds
+  
+  isSyncing = true;
   try {
+    lastSyncTime = Date.now();
     const binancePositions = await getPositions();
     const dbTrades = await prisma.trade.findMany({ where: { status: 'OPEN' } });
 
@@ -145,5 +153,7 @@ export async function syncPositions(): Promise<void> {
 
   } catch (error) {
     console.error('Position Sync Error:', error);
+  } finally {
+    isSyncing = false;
   }
 }
