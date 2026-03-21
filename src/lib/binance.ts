@@ -202,7 +202,9 @@ export async function getKlines(symbol: string, interval: string, limit: number)
   const response = await fetch(url);
   const data = await response.json();
   
-  if (!response.ok) throw new Error('Binance public klines error');
+  if (!response.ok) {
+    throw new Error(`Binance klines error for ${symbol}: ${data.msg || response.statusText}`);
+  }
 
   return data.map((d: any) => ({
     openTime: d[0],
