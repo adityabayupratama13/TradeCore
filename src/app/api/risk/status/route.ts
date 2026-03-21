@@ -28,7 +28,9 @@ export async function GET() {
       drawdownPct: cb.drawdownPct,
       maxDrawdownPct: cb.rules?.maxDrawdownPct || 15,
       canTrade: cb.canTrade,
-      warnings: cb.warnings
+      warnings: cb.warnings,
+      rules: cb.rules || {},
+      capital: cb.capital
     });
   } catch (error) {
     console.error('API /risk/status error:', error);
