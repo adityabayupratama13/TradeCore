@@ -8,6 +8,7 @@ import { TRADING_MODES, getModeConfig } from "@/lib/tradingModes";
 export function RiskRulesForm() {
   const { status, refreshStatus } = useRiskStatus();
   const [formData, setFormData] = useState<any>({});
+  const [targetUsd, setTargetUsd] = useState<number>(350);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
@@ -19,7 +20,10 @@ export function RiskRulesForm() {
     if (status?.rules) {
       setFormData(status.rules);
     }
-  }, [status?.rules]);
+    if (status?.dailyProfitTarget !== undefined) {
+      setTargetUsd(status.dailyProfitTarget);
+    }
+  }, [status?.rules, status?.dailyProfitTarget]);
 
   if (!status?.rules) return <div className="h-96 animate-pulse bg-[#0E1628] rounded-xl" />;
 
@@ -81,16 +85,23 @@ export function RiskRulesForm() {
   const saveOverrides = async () => {
     setIsSaving(true);
     try {
-      // Overrides simply patch the risk rules table, leaving activeMode intact, which triggers CUSTOM flag
+      // Save risk rules
       const res = await fetch('/api/risk/rules', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
       
+      // Save daily target
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'daily_profit_target_usd', value: targetUsd })
+      });
+      
       const data = await res.json();
       if (res.ok) {
-        showToastMsg("✅ Override berhasil disimpan", 'success');
+        showToastMsg("✅ Override & Target berhasil disimpan", 'success');
         refreshStatus();
       } else {
         showToastMsg(`❌ Failed to save: ${data.error || 'Unknown error'}`, 'error');
@@ -303,12 +314,19 @@ export function RiskRulesForm() {
                  <span className="text-gray-400 text-sm font-bold">Weekly Loss Limit</span>
                  <span className="text-red-400 font-mono text-lg">{formData.maxWeeklyLossPct}%</span>
               </div>
-              <div className="bg-black/40 p-3 rounded border border-red-900/30 flex justify-between items-center">
+               <div className="bg-black/40 p-3 rounded border border-red-900/30 flex justify-between items-center">
                  <span className="text-gray-400 text-sm font-bold">Max Drawdown</span>
                  <span className="text-pink-500 font-mono text-lg">{formData.maxDrawdownPct}%</span>
-              </div>
-           </div>
-        </div>
+               </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-green-900/30">
+               <div className="bg-green-950/20 p-3 rounded border border-green-900/50 flex justify-between items-center">
+                 <span className="text-gray-400 text-sm font-bold flex items-center gap-1">🎯 Daily Profit Target</span>
+                 <span className="text-green-400 font-mono text-lg">${targetUsd}</span>
+               </div>
+            </div>
+         </div>
       </div>
 
       {/* BOTTOM SECTION: CUSTOM OVERRIDE */}
@@ -331,6 +349,12 @@ export function RiskRulesForm() {
                  {/* Position specific Overrides */}
                  <div className="space-y-4">
                     <h4 className="text-gray-500 font-bold uppercase text-xs border-b border-[#1a2540] pb-2">Limits & Core</h4>
+                    
+                    <div className="flex flex-col gap-1 mb-3">
+                      <label className="text-xs text-green-400 font-bold flex items-center gap-1">🎯 Daily Profit Target (USD)</label>
+                      <input type="number" value={targetUsd} onChange={(e) => setTargetUsd(parseFloat(e.target.value))} className="bg-[#0A0E1A] border border-green-900/50 focus:border-green-500 rounded p-2 text-white outline-none" />
+                    </div>
+
                     <div className="flex flex-col gap-1">
                       <label className="text-xs text-gray-400">Max Open Positions</label>
                       <input name="maxOpenPositions" type="number" value={formData.maxOpenPositions||''} onChange={handleChange} className="bg-[#0A0E1A] border border-[#303645] focus:border-blue-500 rounded p-2 text-white outline-none" />

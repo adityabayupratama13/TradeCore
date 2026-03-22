@@ -3,7 +3,7 @@ import { getPositions, closePosition } from './binance';
 import { startEngine, stopEngine, getEngineStatus } from './engineScheduler';
 
 interface TelegramMessage {
-  type: 'LOCK' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED' | 'MODE_CHANGED';
+  type: 'LOCK' | 'TARGET_REACHED' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED' | 'MODE_CHANGED';
   data: Record<string, any>;
 }
 
@@ -36,6 +36,9 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
         break;
       case 'LOCK':
         text = `🔒 TRADECORE — TRADING LOCKED\nCapital: USD ${d.capital}\nReason: Daily loss limit ${d.limit}% reached\nCurrent loss: -${d.lossPct}%\nUnlocks: ${d.unlockTime} WIB\n→ Review your journal now.`;
+        break;
+      case 'TARGET_REACHED':
+        text = `🎯 TRADECORE — DAILY TARGET REACHED\nCapital: USD ${d.capital}\nReason: ${d.reason}\nToday Profit: +$${d.profitAmt}\nUnlocks: ${d.unlockTime} WIB\n→ Enjoy your day!`;
         break;
       case 'WARNING':
         text = `⚠️ TRADECORE — RISK WARNING\n${d.warningType} at ${d.currentPct}% of ${d.limitPct}% limit\nRemaining: USD ${d.remaining}\nBe careful with next trades.`;
@@ -123,6 +126,14 @@ export async function startTelegramListener() {
                   } else if (cmd === '/start') {
                      startEngine();
                      await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "✅ Engine started by user command" } } as any);
+                  } else if (cmd.startsWith('/set_target ')) {
+                     const val = parseFloat(cmd.replace('/set_target ', '').trim());
+                     if (!isNaN(val) && val > 0) {
+                        await prisma.appSettings.upsert({ where: { key: 'daily_profit_target_usd' }, update: { value: String(val) }, create: { key: 'daily_profit_target_usd', value: String(val) }});
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `🎯 Daily profit target locked to $${val.toFixed(2)}` } } as any);
+                     } else {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "❌ Invalid target amount" } } as any);
+                     }
                   } else if (cmd === '/status') {
                      const st = getEngineStatus();
                      await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `Engine IsRunning: ${st.isRunning}` } } as any);

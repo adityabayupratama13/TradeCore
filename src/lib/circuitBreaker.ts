@@ -14,6 +14,7 @@ export interface CircuitBreakerStatus {
   warnings: string[];
   rules: any;
   capital: number;
+  dailyProfitTarget: number;
 }
 
 export async function checkAndEnforceCircuitBreaker(): Promise<CircuitBreakerStatus> {
@@ -57,10 +58,13 @@ async function calculateMetrics(
   const portfolio = await prisma.portfolio.findFirst();
   const startingCapital = portfolio?.totalCapital || 1;
 
+  const targetSetting = await prisma.appSettings.findUnique({ where: { key: 'daily_profit_target_usd' } });
+  const dailyProfitTarget = targetSetting ? parseFloat(targetSetting.value) : 350;
+
   if (!rules) {
     return {
       canTrade: baseCanTrade, isLocked: baseIsLocked, lockedUntil: baseLockedUntil,
-      reason: baseReason, dailyLossPct: 0, weeklyLossPct: 0, drawdownPct: 0, warnings, rules: {}, capital: startingCapital
+      reason: baseReason, dailyLossPct: 0, weeklyLossPct: 0, drawdownPct: 0, warnings, rules: {}, capital: startingCapital, dailyProfitTarget
     };
   }
 
@@ -146,6 +150,52 @@ async function calculateMetrics(
     console.log('🔒 CIRCUIT BREAKER LOCKED until', lockedUntil);
   }
 
+  // Enforce Daily Profit Target Lock
+  if (!isLocked && todayPnl >= dailyProfitTarget) {
+    canTrade = false;
+    isLocked = true;
+    
+    // Lock until tomorrow 00:00 WIB
+    const tomorrowWIB = new Date(nowWIB);
+    tomorrowWIB.setDate(nowWIB.getDate() + 1);
+    tomorrowWIB.setUTCHours(0, 0, 0, 0);
+    lockedUntil = new Date(tomorrowWIB.getTime() - wibOffset).toISOString();
+    reason = `Daily profit target of $${dailyProfitTarget} reached.`;
+
+    await prisma.appSettings.upsert({
+      where: { key: 'circuit_breaker_lock_until' },
+      update: { value: lockedUntil },
+      create: { key: 'circuit_breaker_lock_until', value: lockedUntil }
+    });
+
+    await prisma.riskEvent.create({
+      data: {
+        eventType: 'DAILY_TARGET_LOCK',
+        description: reason,
+        capitalAtEvent: startingCapital
+      }
+    });
+
+    const activeSetting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+    if (activeSetting?.value) {
+      const activePairs = JSON.parse(activeSetting.value);
+      for (const pair of activePairs) {
+        try { await cancelAllOrders(pair.symbol); } catch (err) { }
+      }
+    }
+    
+    await sendTelegramAlert({
+      type: 'TARGET_REACHED',
+      data: {
+        capital: startingCapital,
+        reason: reason,
+        profitAmt: todayPnl.toFixed(2),
+        unlockTime: new Date(lockedUntil).toLocaleString()
+      }
+    });
+    console.log('🎯 DAILY TARGET REACHED. LOCKED until', lockedUntil);
+  }
+
   // Check Weekly Limits
   if (weeklyLossPct >= rules.maxWeeklyLossPct) {
     warnings.push(`Weekly loss limit approaching or reached (${weeklyLossPct.toFixed(1)}%). Review mandatory.`);
@@ -202,6 +252,7 @@ async function calculateMetrics(
     drawdownPct,
     warnings,
     rules,
-    capital: startingCapital
+    capital: startingCapital,
+    dailyProfitTarget
   };
 }

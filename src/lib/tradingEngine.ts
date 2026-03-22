@@ -62,9 +62,12 @@ export async function manageOpenPositions() {
            continue; 
       }
 
-      // RULE 2: BREAKEVEN MOVE
-      const beTrigger = parseFloat(process.env.BREAKEVEN_TRIGGER_PCT || '1.5');
-      if (profitPct >= beTrigger && trade.stopLoss !== trade.entryPrice) {
+      // RULE 2: BREAKEVEN MOVE (At 50% to Target)
+      const targetDistance = Math.abs(trade.entryPrice - takeProfitSafe);
+      const currentDistance = Math.abs(currentPrice - trade.entryPrice);
+      const isBreakevenTriggered = currentDistance >= (targetDistance * 0.5);
+
+      if (isBreakevenTriggered && profitRaw > 0 && trade.stopLoss !== trade.entryPrice) {
            const oppositeSide = isLong ? 'SELL' : 'BUY';
            if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
            await sleep(300);
@@ -347,12 +350,19 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     const startOfDayWIB = new Date();
     startOfDayWIB.setHours(0, 0, 0, 0);
     
-    const tradesToday = await prisma.trade.count({
+    const tradesTodaySymbol = await prisma.trade.count({
       where: {
+        symbol: symbol,
         createdAt: { gte: startOfDayWIB },
         status: { not: 'CANCELLED' }
       }
     });
+
+    if (tradesTodaySymbol >= 3) {
+        console.log(`❌ Max 3 trades per day reached for ${symbol}. Skipping.`);
+        await logEngine({ symbol, action: signal.action, result: 'BLOCKED', reason: `MAX_TRADES_PER_SYMBOL (3) reached today for ${symbol}` });
+        return;
+    }
     
     // Check bypassed
 

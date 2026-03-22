@@ -12,6 +12,7 @@ interface RiskStatus {
   drawdownPct: number;
   warnings: string[];
   rules: any;
+  dailyProfitTarget?: number;
 }
 
 interface RiskContextType {
