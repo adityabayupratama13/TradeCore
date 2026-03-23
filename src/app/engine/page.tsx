@@ -517,22 +517,22 @@ export default function EngineDashboard() {
         </div>
       )}
 
-      {/* TODAY'S BLACKLIST (FAST SL RULE) */}
+      {/* TODAY'S BLACKLIST (FAST SL RULE & MAX TRADES) */}
       <div className="bg-[#1A1A1A] border border-gray-800 rounded-xl p-5">
         <h2 className="font-bold mb-4 flex items-center gap-2 text-red-400">
-          <Square className="w-5 h-5 text-red-500" /> Today's Fast SL Blacklist
+          <Square className="w-5 h-5 text-red-500" /> Today's Constrained / Blocked Coins
         </h2>
         {status.blacklistedCoins?.length === 0 ? (
           <div className="bg-[#151515] p-3 rounded border border-gray-800 text-gray-400 flex items-center gap-2">
-            ✅ No coins currently blacklisted
+            ✅ No coins currently blacklisted or constrained
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {status.blacklistedCoins?.map((coin: any) => (
               <div key={coin.symbol} className="bg-red-500/10 p-3 rounded border border-red-500/20 flex flex-col">
                 <div className="font-bold text-red-400 flex items-center gap-1"><AlertCircle className="w-4 h-4"/> {coin.symbol}</div>
-                <div className="text-xs text-gray-400 mt-1 mb-2">Banned for Fast SL (≤5m loss)</div>
-                <div className="text-xs font-mono text-gray-500 mt-auto">Resumes: {format(new Date(coin.until), 'yyyy-MM-dd HH:mm')}</div>
+                <div className="text-xs text-gray-400 mt-1 mb-2">Blocked: {coin.reason || 'Fast SL (≤5m loss)'}</div>
+                <div className="text-xs font-mono text-gray-500 mt-auto">{coin.reason?.includes('Max Trades') ? 'Resumes: Tomorrow' : `Resumes: ${format(new Date(coin.until), 'yyyy-MM-dd HH:mm')}`}</div>
               </div>
             ))}
           </div>

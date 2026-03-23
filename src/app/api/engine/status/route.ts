@@ -121,8 +121,30 @@ export async function GET() {
       .filter((s:any) => new Date(s.value) > now)
       .map((s:any) => ({
         symbol: s.key.replace('blacklist_', '').replace('_until', ''),
-        until: s.value
+        until: s.value,
+        reason: 'Fast SL (≤5m loss)'
       }));
+
+    // Find coins that hit MAX_TRADES_PER_SYMBOL today
+    const activeRiskRule = await prisma.riskRule.findFirst();
+    const maxTradesPerSymbol = activeRiskRule?.maxOpenPositions || 3;
+    const tradesBySymbol: Record<string, number> = {};
+
+    todayTrades.forEach((t: any) => {
+      tradesBySymbol[t.symbol] = (tradesBySymbol[t.symbol] || 0) + 1;
+    });
+
+    Object.entries(tradesBySymbol).forEach(([sym, count]) => {
+      if (count >= maxTradesPerSymbol) {
+         if (!blacklistedCoins.find((c: any) => c.symbol === sym)) {
+             blacklistedCoins.push({
+               symbol: sym,
+               until: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
+               reason: `Max Trades (${count}/${maxTradesPerSymbol})`
+             });
+         }
+      }
+    });
 
     return NextResponse.json({
       isRunning: memoryStatus.isRunning || (dbStatus?.value === 'RUNNING'),
