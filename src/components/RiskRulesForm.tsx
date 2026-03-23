@@ -12,6 +12,7 @@ export function RiskRulesForm() {
   const [maxHoldHours, setMaxHoldHours] = useState<number>(16);
   const [maxDriftPct, setMaxDriftPct] = useState<number>(0.8);
   const [maxTradesPerSymbol, setMaxTradesPerSymbol] = useState<number>(3);
+  const [simulatedCapital, setSimulatedCapital] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
@@ -38,6 +39,9 @@ export function RiskRulesForm() {
     }).catch(() => {});
     fetch('/api/settings?key=max_trades_per_symbol').then(res => res.json()).then(data => {
       if (data.value) setMaxTradesPerSymbol(parseInt(data.value) || 3);
+    }).catch(() => {});
+    fetch('/api/settings?key=simulated_capital_usd').then(res => res.json()).then(data => {
+      if (data.value !== undefined) setSimulatedCapital(parseFloat(data.value) || 0);
     }).catch(() => {});
   }, [status?.rules, (status as any)?.dailyProfitTarget]);
 
@@ -149,6 +153,12 @@ export function RiskRulesForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: 'max_trades_per_symbol', value: maxTradesPerSymbol })
+      });
+      // Save simulated capital (0 = off)
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'simulated_capital_usd', value: simulatedCapital })
       });
       
       const data = await res.json();
@@ -425,6 +435,38 @@ export function RiskRulesForm() {
                 </div>
               </div>
               
+              {/* SIMULATED CAPITAL */}
+              <div className={`p-4 rounded-xl border-2 ${simulatedCapital > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-[#1a2540] bg-[#0A0E1A]'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-400 flex items-center gap-2">
+                      🎭 Simulated Capital Mode
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${simulatedCapital > 0 ? 'bg-amber-500 text-black' : 'bg-[#1a2540] text-gray-500'}`}>
+                        {simulatedCapital > 0 ? `ACTIVE – $${simulatedCapital}` : 'OFF'}
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Engine berperilaku seakan punya modal sebesar ini, meski akun demo saldo lebih besar. Set 0 untuk nonaktifkan.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="number" min={0} step={10}
+                    value={simulatedCapital}
+                    onChange={(e) => setSimulatedCapital(parseFloat(e.target.value) || 0)}
+                    placeholder="0 = nonaktif"
+                    className={`flex-1 bg-[#0A0E1A] border rounded p-2 text-white outline-none text-sm ${simulatedCapital > 0 ? 'border-amber-500/50 focus:border-amber-400' : 'border-[#303645] focus:border-blue-500'}`}
+                  />
+                  <span className="text-amber-400 font-bold text-sm">USD</span>
+                </div>
+                {simulatedCapital > 0 && (
+                  <p className="text-[10px] text-amber-400/70 mt-2">
+                    ⚡ Position size dihitung dari ${simulatedCapital} — bukan dari real balance Binance
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                  {/* Position specific Overrides */}
                  <div className="space-y-4">

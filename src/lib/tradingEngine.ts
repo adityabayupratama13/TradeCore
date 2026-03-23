@@ -262,13 +262,29 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
 
     const balances = await getBalance();
     const usdtBalance = balances.find((b: any) => b.asset === 'USDT');
-    const availableBalance = usdtBalance ? usdtBalance.availableBalance : 0;
-    const totalWalletBalance = usdtBalance ? usdtBalance.balance : 0;
-    
-    if (portfolio && totalWalletBalance > 0) {
+    const realAvailableBalance = usdtBalance ? usdtBalance.availableBalance : 0;
+    const realWalletBalance = usdtBalance ? usdtBalance.balance : 0;
+
+    // ── CAPITAL OVERRIDE (Simulated Capital) ──────────────────────────
+    // Jika user set simulated_capital_usd di Risk Manager, gunakan nilai itu
+    // sebagai totalWalletBalance untuk kalkulasi position size & risk,
+    // tapi tetap pakai real balance untuk check kecukupan margin.
+    const capitalOverrideSetting = await prisma.appSettings.findUnique({ where: { key: 'simulated_capital_usd' } });
+    const simulatedCapital = capitalOverrideSetting?.value ? parseFloat(capitalOverrideSetting.value) : 0;
+    const isCapitalOverride = simulatedCapital > 0;
+
+    const availableBalance = realAvailableBalance;
+    const totalWalletBalance = isCapitalOverride ? simulatedCapital : realWalletBalance;
+
+    if (isCapitalOverride) {
+      console.log(`🎭 [CAPITAL OVERRIDE] Trading as if capital = $${simulatedCapital} (real balance: $${realWalletBalance.toFixed(2)})`);
+    }
+    // ─────────────────────────────────────────────────────────────────
+
+    if (portfolio && realWalletBalance > 0) {
         await prisma.portfolio.update({
             where: { id: portfolio.id },
-            data: { totalCapital: totalWalletBalance }
+            data: { totalCapital: isCapitalOverride ? simulatedCapital : realWalletBalance }
         });
     }
 
