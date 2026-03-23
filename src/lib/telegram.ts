@@ -174,28 +174,31 @@ export async function startTelegramListener() {
                         await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `❌ Nilai tidak valid. Gunakan antara 1-72 jam.\nContoh: /set_hold 16` } } as any);
                      }
                   } else if (cmd === '/help') {
-                     const helpText = `🤖 *TradeCore Bot — Daftar Command*
-
-📊 *Informasi*
-/status — Cek status engine (running/stopped)
-/positions — Lihat semua posisi terbuka saat ini
-
-⚙️ *Kontrol Engine*
-/start — Nyalakan engine
-/stop — Matikan engine (emergency)
-/pause\\_2h — Pause engine selama 2 jam lalu auto-restart
-
-💰 *Pengaturan Trading*
-/set\\_target [USD] — Ubah target profit harian
-   Contoh: /set\\_target 50
-/set\\_hold [jam] — Ubah max hold profitable trade (1-72 jam)
-   Contoh: /set\\_hold 16
-
-🚨 *Emergency*
-/close\\_all — Tutup SEMUA posisi terbuka
-
-ℹ️ Semua setting juga bisa diubah di menu Risk Manager di dashboard web.`;
+                     const helpText = [
+                       '🤖 TradeCore Bot — Daftar Command',
+                       '',
+                       '📊 Informasi',
+                       '/status — Cek status engine (running/stopped)',
+                       '/positions — Lihat semua posisi terbuka saat ini',
+                       '',
+                       '⚙️ Kontrol Engine',
+                       '/start — Nyalakan engine',
+                       '/stop — Matikan engine (emergency)',
+                       '/pause_2h — Pause engine 2 jam lalu auto-restart',
+                       '',
+                       '💰 Pengaturan Trading',
+                       '/set_target [USD] — Ubah target profit harian',
+                       '   Contoh: /set_target 50',
+                       '/set_hold [jam] — Ubah max hold profitable trade (1-72 jam)',
+                       '   Contoh: /set_hold 16',
+                       '',
+                       '🚨 Emergency',
+                       '/close_all — Tutup SEMUA posisi terbuka',
+                       '',
+                       'Semua setting bisa diubah di Risk Manager di dashboard web.'
+                     ].join('\n');
                      await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: helpText } } as any);
+
 
                }
             }
