@@ -20,8 +20,9 @@ export default function DashboardHome() {
       fetch('/api/trades/recent').then(r => r.ok ? r.json() : []),
       fetch('/api/performance/today').then(r => r.ok ? r.json() : null),
       fetch('/api/risk/status').then(r => r.ok ? r.json() : null),
-    ]).then(([portfolio, trades, performance, risk]) => {
-      setData({ portfolio, trades, performance, risk });
+      fetch('/api/performance/summary').then(r => r.ok ? r.json() : null),
+    ]).then(([portfolio, trades, performance, risk, pSummary]) => {
+      setData({ portfolio, trades, performance: { ...performance, ...pSummary }, risk });
       setLoading(false);
     });
   }, []);
@@ -68,6 +69,18 @@ export default function DashboardHome() {
             <div className="text-3xl font-mono text-white mt-1">
               {performance?.winRate ? Math.round(performance.winRate) : 0}%
             </div>
+            <div className="flex gap-4 mt-2">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">⚡ V1</span>
+                <span className="text-sm font-mono text-[#3b82f6]">{performance?.v1?.winRate ? performance.v1.winRate.toFixed(1) : 0}%</span>
+                <span className="text-[9px] font-mono text-gray-500 mt-0.5">{performance?.v1?.avgDurationHours ? performance.v1.avgDurationHours.toFixed(1) + 'h avg' : '-'}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">🚀 V2</span>
+                <span className="text-sm font-mono text-[#a855f7]">{performance?.v2?.winRate ? performance.v2.winRate.toFixed(1) : 0}%</span>
+                <span className="text-[9px] font-mono text-gray-500 mt-0.5">{performance?.v2?.avgDurationHours ? performance.v2.avgDurationHours.toFixed(1) + 'h avg' : '-'}</span>
+              </div>
+            </div>
           </div>
           {/* Circular Progress Placeholder */}
           <div className="w-14 h-14 rounded-full border-4 border-[#00D4AA] flex flex-col items-center justify-center relative">
@@ -102,6 +115,7 @@ export default function DashboardHome() {
                 <tr className="bg-[#0A0E1A]/50 text-gray-400 text-xs uppercase tracking-wider">
                   <th className="px-5 py-3 font-medium border-b border-[#1a2540]">Symbol</th>
                   <th className="px-5 py-3 font-medium border-b border-[#1a2540]">Dir</th>
+                  <th className="px-5 py-3 font-medium border-b border-[#1a2540]">Engine</th>
                   <th className="px-5 py-3 font-medium border-b border-[#1a2540]">Entry</th>
                   <th className="px-5 py-3 font-medium border-b border-[#1a2540]">P&L</th>
                   <th className="px-5 py-3 font-medium border-b border-[#1a2540]">Status</th>
@@ -118,6 +132,13 @@ export default function DashboardHome() {
                         {trade.direction}
                       </span>
                     </td>
+                    <td className="px-5 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-sans font-bold tracking-wider border border-transparent ${
+                        trade.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
+                      }`}>
+                        {trade.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">{trade.entryPrice}</td>
                     <td className={`px-5 py-3 ${trade.pnl > 0 ? 'text-[#00D4AA]' : trade.pnl < 0 ? 'text-[#FF4757]' : 'text-gray-400'}`}>
                       {trade.pnl ? formatPnL(trade.pnl) : '—'}
@@ -128,7 +149,7 @@ export default function DashboardHome() {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-gray-500 font-sans">No recent trades found</td>
+                    <td colSpan={6} className="px-5 py-8 text-center text-gray-500 font-sans">No recent trades found</td>
                   </tr>
                 )}
               </tbody>

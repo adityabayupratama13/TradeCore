@@ -39,6 +39,7 @@ export default function HistoryPage() {
               <tr>
                 <th className="p-4 pl-6 rounded-tl-xl">Symbol</th>
                 <th className="p-4">Type</th>
+                <th className="p-4">Engine</th>
                 <th className="p-4">Status</th>
                 <th className="p-4">Entry</th>
                 <th className="p-4">Exit</th>
@@ -50,11 +51,11 @@ export default function HistoryPage() {
             <tbody className="divide-y divide-[#1a2540]">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center text-gray-400">Loading ledger...</td>
+                  <td colSpan={9} className="p-10 text-center text-gray-400">Loading ledger...</td>
                 </tr>
               ) : trades.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center text-gray-500 font-medium">No trades recorded yet.</td>
+                  <td colSpan={9} className="p-10 text-center text-gray-500 font-medium">No trades recorded yet.</td>
                 </tr>
               ) : (
                 trades.map((t) => {
@@ -84,6 +85,13 @@ export default function HistoryPage() {
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded text-xs font-bold ${isLong ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                            {t.direction} {t.leverage}x
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs font-bold border border-transparent ${
+                          t.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
+                        }`}>
+                          {t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
                         </span>
                       </td>
                       <td className="p-4">

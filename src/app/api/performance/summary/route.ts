@@ -65,6 +65,30 @@ export async function GET() {
     const capitalUsdt = (await getTotalCapitalUSD());
     const totalReturnPct = (totalReturnIDR / capitalUsdt) * 100;
 
+    const v1Trades = closedTrades.filter(t => (t as any).engineVersion === 'v1');
+    const v2Trades = closedTrades.filter(t => (t as any).engineVersion === 'v2');
+
+    const v1Wins = v1Trades.filter(t => (t.pnl || 0) >= 0).length;
+    const v2Wins = v2Trades.filter(t => (t.pnl || 0) >= 0).length;
+
+    const v1WinRate = v1Trades.length > 0 ? (v1Wins / v1Trades.length) * 100 : 0;
+    const v2WinRate = v2Trades.length > 0 ? (v2Wins / v2Trades.length) * 100 : 0;
+    
+    const calcAvgDurationHours = (trades: any[]) => {
+      let totalHours = 0;
+      let count = 0;
+      trades.forEach(t => {
+        if (t.entryAt && t.exitAt) {
+          totalHours += (new Date(t.exitAt).getTime() - new Date(t.entryAt).getTime()) / 3600000;
+          count++;
+        }
+      });
+      return count > 0 ? totalHours / count : 0;
+    };
+
+    const v1AvgDuration = calcAvgDurationHours(v1Trades);
+    const v2AvgDuration = calcAvgDurationHours(v2Trades);
+
     return NextResponse.json({
       totalReturnPct,
       totalReturnIDR,
@@ -76,7 +100,17 @@ export async function GET() {
       profitFactor,
       maxDrawdownPct,
       avgRiskReward,
-      sharpeRatio
+      sharpeRatio,
+      v1: {
+        winRate: v1WinRate,
+        totalTrades: v1Trades.length,
+        avgDurationHours: v1AvgDuration
+      },
+      v2: {
+        winRate: v2WinRate,
+        totalTrades: v2Trades.length,
+        avgDurationHours: v2AvgDuration
+      }
     });
   } catch (error) {
     console.error('API /performance/summary error:', error);

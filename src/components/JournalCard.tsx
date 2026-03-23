@@ -56,6 +56,11 @@ export function JournalCard({ entry, onClick, onEdit, onDelete }: JournalCardPro
                   {t.direction}
                 </span>
               )}
+              {t && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-widest border border-transparent ${(t.engineVersion || 'v1') === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'}`}>
+                  {(t.engineVersion || 'v1') === 'v2' ? '🚀 V2' : '⚡ V1'}
+                </span>
+              )}
             </div>
             <span className="text-xs text-gray-500">
               {new Date(entry.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
