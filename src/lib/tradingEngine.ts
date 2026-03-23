@@ -11,6 +11,7 @@ import { getCoinCategory } from './coinCategories';
 let cycleNumber = 0;
 
 export async function manageOpenPositions() {
+  await processPendingSignals();
   await syncPositions();
   await checkAndEnforceCircuitBreaker();
   
@@ -68,7 +69,7 @@ export async function manageOpenPositions() {
         // 2. Close 30% of position
         const closeQty = trade.quantity * 0.30;
         const roundedQty = await roundQuantity(trade.symbol, closeQty);
-        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: 'true' }).catch(err => console.error(err));
+        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_1: ${roundedQty} ${trade.symbol}`);
 
         // 3. Update milestone state
@@ -89,7 +90,7 @@ export async function manageOpenPositions() {
         const oppSide = isLong ? 'SELL' : 'BUY';
         const closeQty = trade.quantity * 0.30;
         const roundedQty = await roundQuantity(trade.symbol, closeQty);
-        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: 'true' }).catch(err => console.error(err));
+        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_2: ${roundedQty} ${trade.symbol}`);
 
         milestones.milestone2Hit = true;
@@ -335,8 +336,39 @@ async function checkSufficientMargin(requiredMargin: number): Promise<boolean> {
   return true;
 }
 
-async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any) {
+async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any, isFromPending = false) {
     const symbol = signal.symbol;
+
+    if (signal.entryUrgency === 'WAIT_PULLBACK' && !isFromPending) {
+        const pullbackPct = signal.pullbackPct || 1.0;
+        const targetPrice = signal.action === 'LONG' 
+            ? signal.entryPrice * (1 - (pullbackPct / 100))
+            : signal.entryPrice * (1 + (pullbackPct / 100));
+            
+        console.log(`⏳ [PULLBACK] ${symbol} ${signal.action} waiting for retracement to ${targetPrice.toFixed(4)} (${pullbackPct}% buffer)`);
+        
+        const sigObj = {
+            symbol, direction: signal.action, confidence: signal.confidence,
+            entryPrice: signal.entryPrice, targetPrice,
+            stopLoss: signal.stopLoss, takeProfit: signal.takeProfit,
+            leverage: signal.leverage, timestamp: Date.now()
+        };
+        
+        await prisma.$transaction(async (tx) => {
+            const setting = await tx.appSettings.findUnique({ where: { key: 'pending_signals' }});
+            let pendingArr = setting?.value ? JSON.parse(setting.value) : [];
+            pendingArr = pendingArr.filter((s:any) => s.symbol !== symbol); // remove old
+            pendingArr.push(sigObj);
+            await tx.appSettings.upsert({
+                where: { key: 'pending_signals' },
+                update: { value: JSON.stringify(pendingArr) },
+                create: { key: 'pending_signals', value: JSON.stringify(pendingArr) }
+            });
+        });
+        
+        await logEngine({ symbol, action: signal.action, signal, result: 'PENDING', reason: `Waiting for ${pullbackPct}% pullback to ${targetPrice.toFixed(4)}` });
+        return;
+    }
 
     // ABSOLUTE FIRST CHECK — Removed SAFE_UNIVERSE check for 100% organic operation
 
@@ -524,6 +556,74 @@ async function logEngine({ symbol, action, signal, result, reason }: any) {
       reason
     }
   });
+}
+
+// ==========================================
+// FIX 11: SMART ENTRY PENDING SIGNALS PULLBACK
+// ==========================================
+async function processPendingSignals() {
+  try {
+    const pendingSetting = await prisma.appSettings.findUnique({ where: { key: 'pending_signals' } });
+    if (!pendingSetting || !pendingSetting.value) return;
+    
+    let pendingSignals = JSON.parse(pendingSetting.value);
+    if (!Array.isArray(pendingSignals) || pendingSignals.length === 0) return;
+    
+    const now = Date.now();
+    let executedCount = 0;
+    
+    const validSignals = pendingSignals.filter((sig: any) => (now - sig.timestamp) < (4 * 3600 * 1000));
+    
+    for (const sig of validSignals) {
+       try {
+           const markPriceObj = await getMarkPrice(sig.symbol);
+           const currentPrice = markPriceObj.markPrice;
+           
+           let isHit = false;
+           if (sig.direction === 'LONG' && currentPrice <= sig.targetPrice) isHit = true;
+           if (sig.direction === 'SHORT' && currentPrice >= sig.targetPrice) isHit = true;
+           
+           if (isHit) {
+              console.log(`🎯 PENDING HIT: ${sig.symbol} ${sig.direction} target ${sig.targetPrice} reached (Current: ${currentPrice})`);
+              
+              const balances = await getBalance();
+              const usdtBalance = balances.find((b: any) => b.asset === 'USDT');
+              const availableBalance = usdtBalance ? usdtBalance.availableBalance : 0;
+              const totalWalletBalance = usdtBalance ? usdtBalance.balance : 0;
+              const portfolio = await prisma.portfolio.findFirst();
+              const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
+              
+              const mockSignal = {
+                 symbol: sig.symbol,
+                 action: sig.direction,
+                 confidence: sig.confidence,
+                 entryPrice: currentPrice, // Execute at current hit price
+                 stopLoss: sig.stopLoss,
+                 takeProfit: sig.takeProfit,
+                 leverage: sig.leverage,
+                 entryUrgency: 'MARKET' // Override to market since target is met
+              };
+              
+              const isTestMode = process.env.ENGINE_TEST_MODE === 'true';
+              await executeTradeSignal(mockSignal, portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule, true);
+              sig.executed = true;
+              executedCount++;
+           }
+       } catch (err) {
+           console.error(`Error processing pending signal for ${sig.symbol}:`, err);
+       }
+    }
+    
+    const remainingSignals = validSignals.filter((sig: any) => !sig.executed);
+    if (remainingSignals.length !== pendingSignals.length || executedCount > 0) {
+        await prisma.appSettings.update({
+            where: { key: 'pending_signals' },
+            data: { value: JSON.stringify(remainingSignals) }
+        });
+    }
+  } catch(e) {
+      console.error("Error processing pending signals:", e);
+  }
 }
 
 // ==========================================

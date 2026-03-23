@@ -49,6 +49,14 @@ function validateAndFixSignal(
     if (!signal.leverage || signal.leverage === null) {
       signal.leverage = 1;
     }
+    
+    if (!signal.entryUrgency) {
+      signal.entryUrgency = 'MARKET';
+    }
+    
+    if (signal.entryUrgency === 'WAIT_PULLBACK' && (!signal.pullbackPct || signal.pullbackPct <= 0)) {
+      signal.pullbackPct = 1.0; // Default 1% pullback if not specified
+    }
   }
   return signal;
 }
@@ -112,6 +120,8 @@ export interface TradeSignal {
   takeProfit: number | null;
   leverage: number;
   riskReward: number | null;
+  entryUrgency: 'MARKET' | 'WAIT_PULLBACK';
+  pullbackPct: number | null;
   keySignal: string;
   estimatedDuration?: string | null;
   analyzedAt: Date;
@@ -327,7 +337,7 @@ export async function analyzeMarket(symbol: string, triggerData: any = null, act
          console.log(`[REGIME-SKIP] ${symbol} is RANGING from cache.`);
          return {
             symbol, action: 'SKIP', confidence: 0, reasoning: 'Cached RANGING regime.',
-            entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, keySignal: 'N/A', estimatedDuration: null, analyzedAt: new Date()
+            entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'N/A', estimatedDuration: null, analyzedAt: new Date()
          };
       } else if (hoursDiff >= 1) {
          await prisma.appSettings.update({ where: { key: regimeKey }, data: { value: JSON.stringify({ regime: currentRegime, updatedAt: new Date().toISOString() }) } });
@@ -347,7 +357,7 @@ export async function analyzeMarket(symbol: string, triggerData: any = null, act
          console.log(`[PREFILTER-SKIP] ${symbol} price too close to open position`);
          return {
             symbol, action: 'SKIP', confidence: 0, reasoning: 'Existing position active',
-            entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, keySignal: 'Position Lock', estimatedDuration: null, analyzedAt: new Date()
+            entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'Position Lock', estimatedDuration: null, analyzedAt: new Date()
          };
       }
     }
@@ -545,7 +555,7 @@ within reasonable price targets → action = SKIP.
 NEVER suggest TP closer than 2x SL distance.
 
 JSON only, no markdown:
-{"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}
+{"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_urgency":"MARKET"|"WAIT_PULLBACK","pullback_pct":number|null,"entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}
 `;
 
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -587,6 +597,8 @@ JSON only, no markdown:
       takeProfit: signalObj.take_profit,
       leverage: signalObj.leverage,
       riskReward: signalObj.risk_reward,
+      entryUrgency: signalObj.entry_urgency || 'MARKET',
+      pullbackPct: signalObj.pullback_pct || null,
       keySignal: signalObj.key_signal,
       estimatedDuration: signalObj.estimated_duration,
       analyzedAt: new Date()
@@ -600,7 +612,7 @@ JSON only, no markdown:
     console.error(`AI Analysis Failed for ${symbol}`, error);
     return {
       symbol, action: 'SKIP', confidence: 0, reasoning: `Technical failure extracting AI logic: ${error}`,
-      entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, keySignal: 'ERROR', estimatedDuration: null, analyzedAt: new Date()
+      entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null, entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'ERROR', estimatedDuration: null, analyzedAt: new Date()
     };
   }
 }
