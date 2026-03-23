@@ -72,14 +72,39 @@ export async function manageOpenPositions() {
         await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty, reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_1: ${roundedQty} ${trade.symbol}`);
 
+        // FIX B: Hitung realized PnL dari partial close
+        const partialPnlUsd1 = parseFloat((profitRaw * roundedQty).toFixed(2));
+        const remainingQty1 = parseFloat((trade.quantity - roundedQty).toFixed(8));
+
+        // FIX B: Update DB — quantity sisa + catat partial PnL
+        await prisma.trade.update({
+          where: { id: trade.id },
+          data: { quantity: remainingQty1 }
+        });
+        await prisma.engineLog.create({
+          data: {
+            cycleNumber,
+            symbol: trade.symbol,
+            action: 'PARTIAL_CLOSE',
+            result: 'EXECUTED',
+            reason: `Milestone 1 (+${profitPct.toFixed(1)}% ROE): Closed 30% (${roundedQty} units). Realized PnL: +$${partialPnlUsd1}. SL moved to BEP. Remaining: ${remainingQty1} units.`
+          }
+        });
+
         // 3. Update milestone state
         milestones.milestone1Hit = true;
         await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
 
-        // 4. Telegram alert
+        // 4. FIX A: Telegram alert — kirim field yang benar (bukan lagi undefined)
         await sendTelegramAlert({
           type: 'PARTIAL_TP',
-          data: { symbol: trade.symbol, direction: trade.direction, milestone: 1, profitPct: profitPct.toFixed(1), action: 'SL moved to BEP + 30% closed' }
+          data: {
+            symbol: trade.symbol,
+            direction: trade.direction,
+            partialPnl: partialPnlUsd1.toFixed(2),
+            partialPct: profitPct.toFixed(1),
+            takeProfit: trade.takeProfit ?? 'N/A'
+          }
         });
       }
 
@@ -93,12 +118,38 @@ export async function manageOpenPositions() {
         await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty, reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_2: ${roundedQty} ${trade.symbol}`);
 
+        // FIX B: Hitung realized PnL dari partial close
+        const partialPnlUsd2 = parseFloat((profitRaw * roundedQty).toFixed(2));
+        const remainingQty2 = parseFloat((trade.quantity - roundedQty).toFixed(8));
+
+        // FIX B: Update DB — quantity sisa + catat partial PnL
+        await prisma.trade.update({
+          where: { id: trade.id },
+          data: { quantity: remainingQty2 }
+        });
+        await prisma.engineLog.create({
+          data: {
+            cycleNumber,
+            symbol: trade.symbol,
+            action: 'PARTIAL_CLOSE',
+            result: 'EXECUTED',
+            reason: `Milestone 2 (+${profitPct.toFixed(1)}% ROE): Closed 30% (${roundedQty} units). Realized PnL: +$${partialPnlUsd2}. Remaining: ${remainingQty2} units (40%).`
+          }
+        });
+
         milestones.milestone2Hit = true;
         await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
 
+        // FIX A: Telegram alert — kirim field yang benar
         await sendTelegramAlert({
           type: 'PARTIAL_TP',
-          data: { symbol: trade.symbol, direction: trade.direction, milestone: 2, profitPct: profitPct.toFixed(1), action: 'Another 30% closed. 40% remaining.' }
+          data: {
+            symbol: trade.symbol,
+            direction: trade.direction,
+            partialPnl: partialPnlUsd2.toFixed(2),
+            partialPct: profitPct.toFixed(1),
+            takeProfit: trade.takeProfit ?? 'N/A'
+          }
         });
       }
 

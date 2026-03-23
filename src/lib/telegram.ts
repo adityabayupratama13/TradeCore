@@ -62,7 +62,7 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
         text = `🛡️ BREAKEVEN SECURED\n${d.symbol} ${d.direction}\nSL moved to entry price\nDownside: ZERO | TP still: ${d.takeProfit}\nCurrent profit: +${d.currentPnl}%`;
         break;
       case 'PARTIAL_TP':
-        text = `💰 PARTIAL PROFIT LOCKED\n${d.symbol} — 50% position closed\nProfit taken: +${d.partialPnl} USD (+${d.partialPct}%)\nRemaining 50% → running to TP: ${d.takeProfit}`;
+        text = `💰 PARTIAL PROFIT LOCKED\n${d.symbol} ${d.direction}\nROE saat partial: +${d.partialPct}%\nProfit terkunci: +$${d.partialPnl} USD\nSL sudah dipindah ke BEP ✅\nRemaining position → TP: ${d.takeProfit}`;
         break;
       case 'SESSION_CLOSE':
         text = `⏰ SESSION CLOSE — SECURED\n${d.symbol} ${d.direction} closed\nReason: ${d.reason}\nP&L: ${d.pnl >= 0 ? '+' : ''}${d.pnl} USD (${d.pnlPct}%)\nDuration: ${d.holdDuration}`;

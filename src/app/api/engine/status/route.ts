@@ -94,7 +94,22 @@ export async function GET() {
     const netPnl = (sumUsdt / capitalUsdt) * 100;
 
     const bks = await prisma.engineLog.count({ where: { createdAt: { gte: startOfDay }, action: 'BREAKEVEN_MOVE' } });
-    const pts = await prisma.engineLog.count({ where: { createdAt: { gte: startOfDay }, action: 'PARTIAL_TP' } });
+    // FIX: Hitung dari PARTIAL_CLOSE (bukan PARTIAL_TP yang tidak ada lagi)
+    const pts = await prisma.engineLog.count({ where: { createdAt: { gte: startOfDay }, action: 'PARTIAL_CLOSE' } });
+
+    // FIX B: Hitung realized PnL dari partial closes hari ini
+    const partialCloseLogs = await prisma.engineLog.findMany({
+      where: { createdAt: { gte: startOfDay }, action: 'PARTIAL_CLOSE' },
+      select: { reason: true }
+    });
+    let partialRealizedPnl = 0;
+    for (const log of partialCloseLogs) {
+      if (log.reason) {
+        const match = log.reason.match(/Realized PnL: \+?\$([\d.]+)/);
+        if (match) partialRealizedPnl += parseFloat(match[1]);
+      }
+    }
+    sumUsdt += partialRealizedPnl; // Tambahkan realized partial PnL ke total
 
     const [recentLogs, signalHistory] = await Promise.all([
       prisma.engineLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
