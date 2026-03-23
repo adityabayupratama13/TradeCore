@@ -254,6 +254,25 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const results = await Promise.all(aiPromises);
     const signals: any[] = results.filter(s => s !== null);
 
+    // FIX: Log ALL signals to history, even if SKIP or low confidence, for debugging visibility
+    for (const s of signals) {
+      await prisma.tradeSignalHistory.create({
+        data: {
+          symbol: s.symbol,
+          action: s.action,
+          confidence: s.confidence,
+          reasoning: s.reasoning,
+          entryPrice: s.entryPrice || 0, // Fallback if null
+          stopLoss: s.stopLoss || 0,
+          takeProfit: s.takeProfit || 0,
+          leverage: s.leverage || 1,
+          riskReward: s.riskReward || 0,
+          keySignal: s.keySignal || 'N/A',
+          wasExecuted: false
+        }
+      }).catch(err => console.error("Error saving signal history", err));
+    }
+
     const minConf = 75; // hard minimum regardless of mode
 
     const validSignals = signals
@@ -344,21 +363,7 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     
     // Check bypassed
 
-    await prisma.tradeSignalHistory.create({
-      data: {
-        symbol,
-        action: signal.action,
-        confidence: signal.confidence,
-        reasoning: signal.reasoning,
-        entryPrice: signal.entryPrice,
-        stopLoss: signal.stopLoss,
-        takeProfit: signal.takeProfit,
-        leverage: signal.leverage,
-        riskReward: signal.riskReward,
-        keySignal: signal.keySignal,
-        wasExecuted: false
-      }
-    });
+    // 
 
     if (!signal.entryPrice || !signal.stopLoss || !signal.takeProfit) {
         await logEngine({ symbol, action: signal.action, signal, result: 'ERROR', reason: `LLM missing targets` });

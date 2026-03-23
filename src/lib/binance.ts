@@ -17,7 +17,8 @@ export async function syncTimeOffset() {
     const res = await fetch(`${BASE_URL}/fapi/v1/time`, { cache: 'no-store' }).then(r => r.json());
     const end = Date.now();
     const latency = Math.floor((end - start) / 2);
-    timeOffset = res.serverTime - Date.now() - latency;
+    // Subtract an extra 1000ms to ensure we are ALWAYS safely behind Binance's server time, rarely ahead
+    timeOffset = res.serverTime - Date.now() - latency - 1000;
     hasSyncedTime = true;
     console.log(`[Binance] Time offset synced: ${timeOffset}ms`);
   } catch (err) {
