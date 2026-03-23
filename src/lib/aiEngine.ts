@@ -13,9 +13,22 @@ function validateAndFixSignal(
     if (!signal.stopLoss || signal.stopLoss === null) {
       console.log(`⚠️ AI missing SL for ${symbol}, auto-calculating from ATR`);
       if (signal.action === 'LONG') {
-        signal.stopLoss = currentPrice - (atr * 1.5);
+        signal.stopLoss = currentPrice - (atr * 2.5);
       } else {
-        signal.stopLoss = currentPrice + (atr * 1.5);
+        signal.stopLoss = currentPrice + (atr * 2.5);
+      }
+    }
+    
+    // Enforce hard minimum SL distance to prevent getting wicked out
+    const slDistPct = Math.abs(currentPrice - signal.stopLoss) / currentPrice;
+    const minSlPct = (symbol === 'BTCUSDT' || symbol === 'ETHUSDT') ? 0.015 : 0.03; // 1.5% for majors, 3% for alts
+    
+    if (slDistPct < minSlPct) {
+      console.log(`⚠️ AI SL too tight (${(slDistPct*100).toFixed(2)}%), widening to ${minSlPct*100}% minimum`);
+      if (signal.action === 'LONG') {
+        signal.stopLoss = currentPrice * (1 - minSlPct);
+      } else {
+        signal.stopLoss = currentPrice * (1 + minSlPct);
       }
     }
     
@@ -507,7 +520,7 @@ If there is a conflict → SKIP, period.
 
 ENTRY RULES:
 - Entry on 15m confirmation
-- Stop loss: 1.5x ATR from entry
+- Stop loss: 2.5x ATR from entry
 - Take profit: 2x ATR minimum (R/R >= 1:2)
 - Max hold: 8 hours
 - Category: ${coinCat.name}
