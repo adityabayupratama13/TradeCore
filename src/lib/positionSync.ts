@@ -100,7 +100,6 @@ export async function syncPositions(): Promise<void> {
       }
     }
 
-    // Check if any DB positions CLOSED on Binance (TP/SL hit)
     const binanceSymbols = new Set(binancePositions.map(p => p.symbol));
 
     for (const trade of dbTrades) {
@@ -125,6 +124,34 @@ export async function syncPositions(): Promise<void> {
             exitPrice,
           }
         });
+
+        // ----------------------------------------------------------------------
+        // FAST SL BLACKLIST & MILESTONE CLEANUP
+        // ----------------------------------------------------------------------
+        await prisma.appSettings.deleteMany({ where: { key: `milestone_${trade.id}` } }).catch(()=>{});
+
+        if (!isWin && trade.entryAt) {
+          const holdMinutes = (Date.now() - new Date(trade.entryAt).getTime()) / 60000;
+          if (holdMinutes <= 5) {
+            console.log(`⚡ Fast SL detected: ${trade.symbol} lost in ${holdMinutes.toFixed(1)}min`);
+            const midnight = new Date();
+            midnight.setDate(midnight.getDate() + 1);
+            midnight.setHours(0, 0, 0, 0);
+
+            await prisma.appSettings.upsert({
+              where: { key: `blacklist_${trade.symbol}_until` },
+              update: { value: midnight.toISOString() },
+              create: { key: `blacklist_${trade.symbol}_until`, value: midnight.toISOString() }
+            });
+
+            console.log(`🚫 ${trade.symbol} blacklisted until ${midnight.toISOString()}`);
+
+            await sendTelegramAlert({
+              type: 'FAST_SL_BLACKLIST',
+              data: { symbol: trade.symbol, holdMinutes: holdMinutes.toFixed(1), loss: trade.pnl?.toFixed(2) || '0', blacklistedUntil: 'midnight' }
+            });
+          }
+        }
 
         // 1. Auto Journal insertion!
         await prisma.tradeJournal.create({

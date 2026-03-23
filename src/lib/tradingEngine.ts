@@ -33,107 +33,72 @@ export async function manageOpenPositions() {
       const atr_15m = calculateATR(highs, lows, closes, 14);
       const atrPct = (atr_15m / currentPrice) * 100;
 
-      const isLong = trade.direction === 'LONG';
+      const isLong = trade.direction === 'LONG' || trade.direction === 'BUY';
       const profitRaw = isLong ? currentPrice - trade.entryPrice : trade.entryPrice - currentPrice;
-      const profitPct = (profitRaw / trade.entryPrice) * 100;
+      const profitPct = (profitRaw / trade.entryPrice) * trade.leverage * 100;
 
       let holdHours = (Date.now() - new Date(trade.entryAt).getTime()) / 3600000;
       let takeProfitSafe = trade.takeProfit || (trade.entryPrice * (isLong ? 1.05 : 0.95));
 
-      // RULE 1: PARTIAL TP
-      const isPartialEnabled = process.env.PARTIAL_TP_ENABLED === 'true';
-      const partialKey = `partial_tp_${trade.id}`;
-      const hasPartial = await prisma.appSettings.findUnique({ where: { key: partialKey } });
-      
-      if (isPartialEnabled && profitPct >= atrPct && !hasPartial) {
-           await closePosition(trade.symbol, trade.quantity / 2);
-           await prisma.appSettings.create({ data: { key: partialKey, value: 'true' } });
-           await prisma.trade.update({ where: { id: trade.id }, data: { quantity: trade.quantity / 2 } });
-           await sendTelegramAlert({
-              type: 'PARTIAL_TP',
-              data: {
-                 symbol: trade.symbol,
-                 partialPnl: profitRaw * (trade.quantity / 2), 
-                 partialPct: profitPct.toFixed(2),
-                 takeProfit: takeProfitSafe
-              }
-           });
-           await logEngine({ symbol: trade.symbol, action: 'PARTIAL_TP', result: 'EXECUTED', reason: `Hit ATR ${atrPct.toFixed(2)}%` });
-           continue; 
+      // ----------------------------------------------------------------------
+      // PROGRESSIVE PROFIT TAKING (MILESTONES)
+      // ----------------------------------------------------------------------
+      const milestoneKey = `milestone_${trade.id}`;
+      const milestoneSetting = await prisma.appSettings.findUnique({ where: { key: milestoneKey } });
+      const milestones = milestoneSetting?.value 
+        ? JSON.parse(milestoneSetting.value) 
+        : { milestone1Hit: false, milestone2Hit: false, milestone3Hit: false };
+
+      // MILESTONE 1: +30% profit (ROE)
+      if (profitPct >= 30 && !milestones.milestone1Hit) {
+        console.log(`🎯 ${trade.symbol} Milestone 1: +${profitPct.toFixed(1)}%`);
+        
+        if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, parseInt(trade.slAlgoId)).catch(()=>{});
+        await sleep(300);
+        const oppSide = isLong ? 'SELL' : 'BUY';
+        const roundedTrig = await roundPrice(trade.symbol, trade.entryPrice);
+        const newSl = await placeAlgoOrder({
+          algoType: 'CONDITIONAL', symbol: trade.symbol, side: oppSide,
+          type: 'STOP_MARKET', triggerPrice: roundedTrig.toString(),
+          closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'FALSE', timeInForce: 'GTC'
+        });
+        await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
+        console.log(`🛡️ SL moved to BEP: ${trade.entryPrice} for ${trade.symbol}`);
+
+        // 2. Close 30% of position
+        const closeQty = trade.quantity * 0.30;
+        const roundedQty = await roundQuantity(trade.symbol, closeQty);
+        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: 'true' }).catch(err => console.error(err));
+        console.log(`💰 Partial close MILESTONE_1: ${roundedQty} ${trade.symbol}`);
+
+        // 3. Update milestone state
+        milestones.milestone1Hit = true;
+        await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
+
+        // 4. Telegram alert
+        await sendTelegramAlert({
+          type: 'MILESTONE_HIT',
+          data: { symbol: trade.symbol, direction: trade.direction, milestone: 1, profitPct: profitPct.toFixed(1), action: 'SL moved to BEP + 30% closed' }
+        });
       }
 
-      // RULE 2: BREAKEVEN MOVE (At 50% to Target)
-      const targetDistance = Math.abs(trade.entryPrice - takeProfitSafe);
-      const currentDistance = Math.abs(currentPrice - trade.entryPrice);
-      const isBreakevenTriggered = currentDistance >= (targetDistance * 0.5);
+      // MILESTONE 2: +60% profit (ROE)
+      if (profitPct >= 60 && !milestones.milestone2Hit) {
+        console.log(`🎯 ${trade.symbol} Milestone 2: +${profitPct.toFixed(1)}%`);
+        
+        const oppSide = isLong ? 'SELL' : 'BUY';
+        const closeQty = trade.quantity * 0.30;
+        const roundedQty = await roundQuantity(trade.symbol, closeQty);
+        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: 'true' }).catch(err => console.error(err));
+        console.log(`💰 Partial close MILESTONE_2: ${roundedQty} ${trade.symbol}`);
 
-      if (isBreakevenTriggered && profitRaw > 0 && trade.stopLoss !== trade.entryPrice) {
-           const oppositeSide = isLong ? 'SELL' : 'BUY';
-           if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
-           await sleep(300);
-           
-           const roundedTrig = await roundPrice(trade.symbol, trade.entryPrice);
-           const newSl = await placeAlgoOrder({
-             algoType: 'CONDITIONAL',
-             symbol: trade.symbol,
-             side: oppositeSide,
-             type: 'STOP_MARKET',
-             triggerPrice: roundedTrig.toString(),
-             closePosition: 'true',
-             workingType: 'MARK_PRICE',
-             priceProtect: 'FALSE',
-             timeInForce: 'GTC'
-           });
+        milestones.milestone2Hit = true;
+        await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
 
-           await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
-           await sendTelegramAlert({ type: 'BREAKEVEN_MOVE', data: { symbol: trade.symbol, direction: trade.direction, takeProfit: takeProfitSafe, currentPnl: profitPct.toFixed(2) } });
-      }
-
-      // RULE 3: TRAIL STOP
-      if (profitPct >= 3.0 && profitPct < 5.0 && trade.stopLoss !== (isLong ? trade.entryPrice * 1.01 : trade.entryPrice * 0.99)) {
-           const trailPrice = isLong ? trade.entryPrice * 1.01 : trade.entryPrice * 0.99;
-           if ((isLong && trailPrice > (trade.stopLoss || 0)) || (!isLong && trailPrice < (trade.stopLoss || 999999))) {
-               const oppositeSide = isLong ? 'SELL' : 'BUY';
-               if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
-               await sleep(300);
-               
-               const roundedTrig = await roundPrice(trade.symbol, trailPrice);
-               const newSl = await placeAlgoOrder({
-                 algoType: 'CONDITIONAL',
-                 symbol: trade.symbol,
-                 side: oppositeSide,
-                 type: 'STOP_MARKET',
-                 triggerPrice: roundedTrig.toString(),
-                 closePosition: 'true',
-                 workingType: 'MARK_PRICE',
-                 priceProtect: 'FALSE',
-                 timeInForce: 'GTC'
-               });
-               
-               await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
-           }
-      } else if (profitPct >= 5.0) {
-           const trailPrice2 = isLong ? trade.entryPrice * 1.025 : trade.entryPrice * 0.975;
-           if ((isLong && trailPrice2 > (trade.stopLoss || 0)) || (!isLong && trailPrice2 < (trade.stopLoss || 999999))) {
-               const oppositeSide = isLong ? 'SELL' : 'BUY';
-               if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, trade.slAlgoId).catch(()=>{});
-               await sleep(300);
-
-               const roundedTrig = await roundPrice(trade.symbol, trailPrice2);
-               const newSl = await placeAlgoOrder({
-                 algoType: 'CONDITIONAL',
-                 symbol: trade.symbol,
-                 side: oppositeSide,
-                 type: 'STOP_MARKET',
-                 triggerPrice: roundedTrig.toString(),
-                 closePosition: 'true',
-                 workingType: 'MARK_PRICE',
-                 priceProtect: 'FALSE',
-                 timeInForce: 'GTC'
-               });
-               
-               await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
-           }
+        await sendTelegramAlert({
+          type: 'MILESTONE_HIT',
+          data: { symbol: trade.symbol, direction: trade.direction, milestone: 2, profitPct: profitPct.toFixed(1), action: 'Another 30% closed. 40% remaining.' }
+        });
       }
 
       // RULE 4: MAX HOLD
@@ -349,6 +314,19 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
 
     const startOfDayWIB = new Date();
     startOfDayWIB.setHours(0, 0, 0, 0);
+
+    const blacklistSetting = await prisma.appSettings.findUnique({
+      where: { key: `blacklist_${symbol}_until` }
+    });
+    if (blacklistSetting?.value) {
+      const blacklistUntil = new Date(blacklistSetting.value);
+      if (blacklistUntil > new Date()) {
+        const hoursLeft = ((blacklistUntil.getTime() - Date.now()) / 3600000).toFixed(1);
+        console.log(`🚫 ${symbol} blacklisted for ${hoursLeft}h more (fast SL rule)`);
+        await logEngine({ symbol, action: signal.action, result: 'BLOCKED', reason: `Fast SL Blacklisted until ${blacklistUntil.toISOString()}` });
+        return;
+      }
+    }
     
     const tradesTodaySymbol = await prisma.trade.count({
       where: {

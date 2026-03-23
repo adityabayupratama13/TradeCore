@@ -3,7 +3,7 @@ import { getPositions, closePosition } from './binance';
 import { startEngine, stopEngine, getEngineStatus } from './engineScheduler';
 
 interface TelegramMessage {
-  type: 'LOCK' | 'TARGET_REACHED' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED' | 'MODE_CHANGED';
+  type: 'LOCK' | 'TARGET_REACHED' | 'WARNING' | 'TRADE_OPEN' | 'TRADE_CLOSE' | 'DAILY_SUMMARY' | 'TEST' | 'DRAWDOWN_WARNING' | 'TRIGGER_FIRED' | 'AI_SIGNAL' | 'AI_SKIP' | 'BREAKEVEN_MOVE' | 'PARTIAL_TP' | 'SESSION_CLOSE' | 'RAW_MESSAGE' | 'PAIRS_UPDATED' | 'MODE_CHANGED' | 'MILESTONE_HIT' | 'FAST_SL_BLACKLIST';
   data: Record<string, any>;
 }
 
@@ -42,6 +42,12 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
         break;
       case 'WARNING':
         text = `⚠️ TRADECORE — RISK WARNING\n${d.warningType} at ${d.currentPct}% of ${d.limitPct}% limit\nRemaining: USD ${d.remaining}\nBe careful with next trades.`;
+        break;
+      case 'MILESTONE_HIT':
+        text = `🎯 MILESTONE ${d.milestone} HIT\n${d.symbol} ${d.direction}\nProfit: +${d.profitPct}%\nAction: ${d.action}\nRemaining position: ${d.milestone === 1 ? '70%' : '40%'}\nSL: ${d.milestone === 1 ? 'Moved to BEP ✅' : 'At BEP ✅'}`;
+        break;
+      case 'FAST_SL_BLACKLIST':
+        text = `⚡ FAST SL — BLACKLISTED\n${d.symbol} hit SL in only ${d.holdMinutes} minutes!\nLoss: USD ${d.loss}\nAction: ${d.symbol} banned for rest of today.\nResumes: ${d.blacklistedUntil}\nReason: Market rejected this setup quickly.`;
         break;
       case 'TRIGGER_FIRED':
         text = `⚡ TRIGGER DETECTED\n${d.symbol} — ${d.triggerType}\nStrength: ${'⭐'.repeat(d.strength)}/3\n🤖 AI analyzing now...`;

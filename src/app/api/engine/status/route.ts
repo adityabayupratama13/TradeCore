@@ -114,6 +114,16 @@ export async function GET() {
       }
     }
 
+    const allSettings = await prisma.appSettings.findMany({
+      where: { key: { startsWith: 'blacklist_' } }
+    });
+    const blacklistedCoins = allSettings
+      .filter((s:any) => new Date(s.value) > now)
+      .map((s:any) => ({
+        symbol: s.key.replace('blacklist_', '').replace('_until', ''),
+        until: s.value
+      }));
+
     return NextResponse.json({
       isRunning: memoryStatus.isRunning || (dbStatus?.value === 'RUNNING'),
       lastRun: lastRunRaw?.value || null,
@@ -124,7 +134,8 @@ export async function GET() {
       watcherStatus,
       signalHistory,
       recentLogs,
-      unprotectedPositions
+      unprotectedPositions,
+      blacklistedCoins
     });
 
   } catch (err: any) {
