@@ -30,7 +30,8 @@ export async function GET() {
       canTrade: cb.canTrade,
       warnings: cb.warnings,
       rules: cb.rules || {},
-      capital: cb.capital
+      capital: cb.capital,
+      dailyProfitTarget: cb.dailyProfitTarget
     });
   } catch (error) {
     console.error('API /risk/status error:', error);
