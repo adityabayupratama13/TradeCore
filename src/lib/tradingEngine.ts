@@ -816,20 +816,25 @@ export async function calculatePositionSize(
   entryPrice: number,
   stopLoss: number,
   side: 'BUY' | 'SELL',
-  _ignoredCapital: number, // Removed totalCapital dependency
+  totalCapitalOverride: number, // Simulated capital override (set di Risk Manager)
   signalConfidence: number
 ): Promise<{ quantity: number, margin: number, leverage: number, liqPrice: number, adjustedSl: number } | null> {
   
   const balance = await getBalance();
   const usdtBalance = balance.find((b: any) => b.asset === 'USDT');
-  const totalCapital = usdtBalance?.availableBalance ?? 0;
+  const realAvailable = usdtBalance?.availableBalance ?? 0;
   
-  console.log(`💰 USDT Balance: $${totalCapital.toFixed(2)}`);
+  // Gunakan override jika aktif (simulated capital), otherwise real balance
+  const totalCapital = totalCapitalOverride > 0 ? totalCapitalOverride : realAvailable;
   
-  if (totalCapital < 5) {
+  console.log(`💰 USDT Balance: $${realAvailable.toFixed(2)}${totalCapitalOverride > 0 ? ` (Override: $${totalCapitalOverride})` : ''}`);
+  
+  // Check real available balance untuk pastikan margin bisa dipenuhi
+  if (realAvailable < 5) {
     console.log('❌ Insufficient USDT balance < $5. Stopping.');
     return null;
   }
+
 
   const category = getCoinCategory(symbol);
   const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
