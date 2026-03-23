@@ -53,16 +53,36 @@ export async function manageOpenPositions() {
       if (profitPct >= 30 && !milestones.milestone1Hit) {
         console.log(`🎯 ${trade.symbol} Milestone 1: +${profitPct.toFixed(1)}%`);
         
+        // FIX: Cancel BOTH SL and TP before placing new orders
+        // Binance hanya izinkan satu closePosition:true per arah — harus cancel semua dulu
         if (trade.slAlgoId) await cancelAlgoOrder(trade.symbol, parseInt(trade.slAlgoId)).catch(()=>{});
-        await sleep(300);
+        if (trade.tpAlgoId) await cancelAlgoOrder(trade.symbol, parseInt(trade.tpAlgoId)).catch(()=>{});
+        await sleep(500);
+
         const oppSide = isLong ? 'SELL' : 'BUY';
+        
+        // Place new SL at BEP
         const roundedTrig = await roundPrice(trade.symbol, trade.entryPrice);
         const newSl = await placeAlgoOrder({
           algoType: 'CONDITIONAL', symbol: trade.symbol, side: oppSide,
           type: 'STOP_MARKET', triggerPrice: roundedTrig.toString(),
           closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'FALSE', timeInForce: 'GTC'
         });
-        await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString() } });
+        await sleep(300);
+
+        // Re-place TP at original take profit price
+        let newTpAlgoId = trade.tpAlgoId;
+        if (trade.takeProfit) {
+          const roundedTP = await roundPrice(trade.symbol, trade.takeProfit);
+          const newTp = await placeAlgoOrder({
+            algoType: 'CONDITIONAL', symbol: trade.symbol, side: oppSide,
+            type: 'TAKE_PROFIT_MARKET', triggerPrice: roundedTP.toString(),
+            closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'FALSE', timeInForce: 'GTC'
+          }).catch(err => { console.error(`[M1] Re-place TP failed:`, err.message); return null; });
+          if (newTp?.algoId) newTpAlgoId = newTp.algoId.toString();
+        }
+
+        await prisma.trade.update({ where: { id: trade.id }, data: { stopLoss: roundedTrig, slAlgoId: newSl?.algoId?.toString(), tpAlgoId: newTpAlgoId } });
         console.log(`🛡️ SL moved to BEP: ${trade.entryPrice} for ${trade.symbol}`);
 
         // 2. Close 30% of position
@@ -94,7 +114,7 @@ export async function manageOpenPositions() {
         milestones.milestone1Hit = true;
         await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
 
-        // 4. FIX A: Telegram alert — kirim field yang benar (bukan lagi undefined)
+        // 4. FIX A: Telegram alert
         await sendTelegramAlert({
           type: 'PARTIAL_TP',
           data: {
@@ -106,7 +126,6 @@ export async function manageOpenPositions() {
           }
         });
       }
-
       // MILESTONE 2: +60% profit (ROE)
       if (profitPct >= 60 && !milestones.milestone2Hit) {
         console.log(`🎯 ${trade.symbol} Milestone 2: +${profitPct.toFixed(1)}%`);
@@ -117,21 +136,13 @@ export async function manageOpenPositions() {
         await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty, reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_2: ${roundedQty} ${trade.symbol}`);
 
-        // FIX B: Hitung realized PnL dari partial close
         const partialPnlUsd2 = parseFloat((profitRaw * roundedQty).toFixed(2));
         const remainingQty2 = parseFloat((trade.quantity - roundedQty).toFixed(8));
 
-        // FIX B: Update DB — quantity sisa + catat partial PnL
-        await prisma.trade.update({
-          where: { id: trade.id },
-          data: { quantity: remainingQty2 }
-        });
+        await prisma.trade.update({ where: { id: trade.id }, data: { quantity: remainingQty2 } });
         await prisma.engineLog.create({
           data: {
-            cycleNumber,
-            symbol: trade.symbol,
-            action: 'PARTIAL_CLOSE',
-            result: 'EXECUTED',
+            cycleNumber, symbol: trade.symbol, action: 'PARTIAL_CLOSE', result: 'EXECUTED',
             reason: `Milestone 2 (+${profitPct.toFixed(1)}% ROE): Closed 30% (${roundedQty} units). Realized PnL: +$${partialPnlUsd2}. Remaining: ${remainingQty2} units (40%).`
           }
         });
@@ -139,14 +150,11 @@ export async function manageOpenPositions() {
         milestones.milestone2Hit = true;
         await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
 
-        // FIX A: Telegram alert — kirim field yang benar
         await sendTelegramAlert({
           type: 'PARTIAL_TP',
           data: {
-            symbol: trade.symbol,
-            direction: trade.direction,
-            partialPnl: partialPnlUsd2.toFixed(2),
-            partialPct: profitPct.toFixed(1),
+            symbol: trade.symbol, direction: trade.direction,
+            partialPnl: partialPnlUsd2.toFixed(2), partialPct: profitPct.toFixed(1),
             takeProfit: trade.takeProfit ?? 'N/A'
           }
         });
