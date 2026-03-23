@@ -39,7 +39,8 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
     lockedUntil: null as string | null,
     drawdownPct: 0,
     riskStatus: 'SAFE',
-    activeMode: 'SAFE'
+    activeMode: 'SAFE',
+    engineVersion: 'v1'
   });
 
   useEffect(() => {
@@ -55,8 +56,9 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
     Promise.all([
       fetch('/api/portfolio').then(res => res.json()),
       fetch('/api/performance/today').then(res => res.json()),
-      fetch('/api/risk/status').then(res => res.json())
-    ]).then(([portfolio, perf, risk]) => {
+      fetch('/api/risk/status').then(res => res.json()),
+      fetch('/api/engine/version').then(res => res.json())
+    ]).then(([portfolio, perf, risk, engine]) => {
       setStatusData({
         totalCapital: portfolio?.totalCapital || 0,
         dailyPnl: perf?.dailyPnl || 0,
@@ -67,7 +69,8 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
         lockedUntil: perf?.lockedUntil || null,
         drawdownPct: risk?.drawdownPct || 0,
         riskStatus: perf?.isLocked ? 'LOCKED' : (risk?.status || 'SAFE'),
-        activeMode: risk?.rules?.activeMode || 'SAFE'
+        activeMode: risk?.rules?.activeMode || 'SAFE',
+        engineVersion: engine?.version || 'v1'
       });
     }).catch(console.error);
   }, []);
@@ -141,13 +144,35 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
 
         {/* Trading Mode */}
         <div className="flex flex-col text-right cursor-pointer" onClick={() => window.location.href='/risk'}>
-          <span className="hidden md:block text-[10px] text-gray-400 font-medium uppercase tracking-wider">Mode</span>
+          <span className="hidden md:block text-[10px] text-gray-400 font-medium uppercase tracking-wider">Risk Mode</span>
           <div className="text-[10px] md:text-[11px] px-2 py-0.5 md:mt-0.5 rounded font-bold tracking-widest text-center" 
                style={{ 
                  color: activeModeData.color, 
                  backgroundColor: activeModeData.color + '20' 
                }}>
             {activeModeData.badge}
+          </div>
+        </div>
+
+        <div className="hidden md:block w-[1px] h-8 bg-[#1a2540]" />
+
+        {/* Engine Version */}
+        <div className="flex flex-col text-right cursor-pointer" onClick={async () => {
+          const newV = statusData.engineVersion === 'v1' ? 'v2' : 'v1';
+          setStatusData({...statusData, engineVersion: newV});
+          await fetch('/api/engine/version', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({version: newV}) 
+          });
+        }}>
+          <span className="hidden md:block text-[10px] text-gray-400 font-medium uppercase tracking-wider">AI Engine</span>
+          <div className="text-[10px] md:text-[11px] px-2 py-0.5 md:mt-0.5 rounded font-bold tracking-widest text-center hover:bg-opacity-40 transition-all border border-transparent" 
+               style={{ 
+                 color: statusData.engineVersion === 'v2' ? '#a855f7' : '#3b82f6', 
+                 backgroundColor: statusData.engineVersion === 'v2' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+               }}>
+            {statusData.engineVersion === 'v2' ? '🚀 V2 (SMC)' : '⚡ V1 (CLASSIC)'}
           </div>
         </div>
 

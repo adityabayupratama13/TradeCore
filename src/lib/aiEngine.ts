@@ -254,12 +254,77 @@ export function calculateVolumeProfile(volumes: number[]): { avg: number, curren
   return { avg, current, ratio: current / avg };
 }
 
+// ----------------------------------------------------
+// SMART MONEY CONCEPTS (SMC) & PA CALCULATIONS (ENGINE V2)
+// ----------------------------------------------------
+
+export function calculatePivotPoints(highs: number[], lows: number[], leftBars: number = 3, rightBars: number = 3) {
+  const pivotHighs: number[] = [];
+  const pivotLows: number[] = [];
+  
+  for (let i = leftBars; i < highs.length - rightBars; i++) {
+    let isHigh = true;
+    let isLow = true;
+    
+    for (let j = 1; j <= leftBars; j++) {
+      if (highs[i - j] > highs[i]) isHigh = false;
+      if (lows[i - j] < lows[i]) isLow = false;
+    }
+    for (let j = 1; j <= rightBars; j++) {
+      if (highs[i + j] > highs[i]) isHigh = false;
+      if (lows[i + j] < lows[i]) isLow = false;
+    }
+    
+    if (isHigh) pivotHighs.push(highs[i]);
+    if (isLow) pivotLows.push(lows[i]);
+  }
+  return { pivotHighs, pivotLows };
+}
+
+export function detectOrderBlocks(klines: any[], lookback: number = 20) {
+  const obs: { type: 'BULLISH'|'BEARISH', price: number }[] = [];
+  const slice = klines.slice(-lookback);
+  
+  let totalBody = 0;
+  slice.forEach(k => totalBody += Math.abs(k.close - k.open));
+  const avgBody = totalBody / slice.length || 1;
+  
+  slice.forEach(k => {
+    const body = Math.abs(k.close - k.open);
+    if (body > avgBody * 2.5) { // Giant impulsive candle
+      if (k.close > k.open) obs.push({ type: 'BULLISH', price: k.low });
+      else obs.push({ type: 'BEARISH', price: k.high });
+    }
+  });
+  return obs;
+}
+
+export function analyzeCandlestickAction(kline: any) {
+  const body = Math.abs(kline.close - kline.open);
+  const totalLength = kline.high - kline.low;
+  
+  if (totalLength === 0) return 'Doji';
+  
+  const upperWick = kline.close > kline.open ? kline.high - kline.close : kline.high - kline.open;
+  const lowerWick = kline.close > kline.open ? kline.open - kline.low : kline.close - kline.low;
+  
+  const upperRatio = upperWick / totalLength;
+  const lowerRatio = lowerWick / totalLength;
+  const bodyRatio = body / totalLength;
+
+  if (bodyRatio < 0.25 && lowerRatio > 0.6) return 'Bullish Pin Bar (Rejection of lower prices)';
+  if (bodyRatio < 0.25 && upperRatio > 0.6) return 'Bearish Pin Bar (Rejection of higher prices)';
+  if (bodyRatio > 0.8) return kline.close > kline.open ? 'Strong Bullish Body' : 'Strong Bearish Body';
+  if (bodyRatio < 0.15) return 'Doji (Indecision)';
+  
+  return 'Normal';
+}
 
 // ----------------------------------------------------
 // AI ANALYSIS ENGINE
 // ----------------------------------------------------
 
-export async function analyzeMarket(symbol: string, triggerData: any = null, activeMode: string = 'SAFE'): Promise<TradeSignal> {
+export async function analyzeMarket(symbol: string, triggerData: any = null, activeMode: string = 'SAFE', engineVersion: string = 'v1'): Promise<TradeSignal> {
   // Removed SAFE_UNIVERSE check. AI is completely unleashed organically!
 
   const [
@@ -488,7 +553,8 @@ ENTRY RULES FOR THIS PAIR:
     }
   }
 
-  const prompt = `Crypto futures day trader. Analyze ${symbol} for intraday trade.
+  const promptPreamble = engineVersion === 'v1' 
+    ? `Crypto futures day trader. Analyze ${symbol} for intraday trade.
 Goal: catch moves completing within 2-8 hours.
 
 TRADING MODE: ${activeMode}
@@ -499,7 +565,17 @@ ${activeMode === 'SAFE'
   : 'Balanced approach.'}
 
 ${triggerContext}
-PRICE: ${markPriceObj.markPrice} | 24h: ${ticker.priceChangePercent}% | Vol: ${vol_15m.ratio.toFixed(2)}x avg
+PRICE: ${markPriceObj.markPrice} | 24h: ${ticker.priceChangePercent}% | Vol: ${vol_15m.ratio.toFixed(2)}x avg`
+    : `[ENGINE V2: SMART MONEY CONCEPTS]
+You are a top-tier Institutional Quant / SMC Trader. Analyze ${symbol} for intraday execution.
+Goal: Identify high-probability swing zones utilizing Market Structure, Liquidity, and precise Price Action.
+
+TRADING MODE: ${activeMode}
+
+${triggerContext}
+CURRENT PRICE: ${markPriceObj.markPrice} | 24h: ${ticker.priceChangePercent}% | Relative Vol: ${vol_15m.ratio.toFixed(2)}x`;
+
+  const prompt = `${promptPreamble}
 
 ${hunterContext}
 
@@ -508,7 +584,7 @@ INDICATORS:
      MACDhist=${macd_15m.histogram.toFixed(4)} ADX=${adx_15m} BB=${bbPos_15m}%
      Last 3 candles: ${last3candles}
 1H:  EMA20=${ema20_1h} EMA50=${ema50_1h} RSI=${rsi_1h}
-     MACDhist=${macd_1h.histogram.toFixed(4)} ADX=${adx_1h} Trend=${trend_1h} // Wait, calculating trend_1h from code directly
+     MACDhist=${macd_1h.histogram.toFixed(4)} ADX=${adx_1h} Trend=${trend_1h}
 4H:  Bias=${trend_4h} (context only)
 
 ORDERBOOK: BidAsk=${obImbalance}
@@ -530,7 +606,7 @@ If there is a conflict → SKIP, period.
 
 ENTRY RULES:
 - Entry on 15m confirmation
-- Stop loss: 2.5x ATR from entry
+- Stop loss: ${engineVersion === 'v2' ? 'See SMC Rules Below' : '2.5x ATR from entry'}
 - Take profit: 2x ATR minimum (R/R >= 1:2)
 - Max hold: 8 hours
 - Category: ${coinCat.name}
@@ -558,6 +634,45 @@ JSON only, no markdown:
 {"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_urgency":"MARKET"|"WAIT_PULLBACK","pullback_pct":number|null,"entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}
 `;
 
+  // --- V2 LOGIC INJECTIONS ---
+  let finalPrompt = prompt;
+  if (engineVersion === 'v2') {
+     const pivots = calculatePivotPoints(d1h.high, d1h.low);
+     const obs = detectOrderBlocks(klines15m);
+     const recentCandleAnalysis = analyzeCandlestickAction(klines15m[klines15m.length - 1]);
+     
+     const recentResistances = pivots.pivotHighs.slice(-2).map(p => p.toFixed(4)).join(', ') || 'None';
+     const recentSupports = pivots.pivotLows.slice(-2).map(p => p.toFixed(4)).join(', ') || 'None';
+     const recentOBs = obs.slice(-2).map(ob => `${ob.type} at ${ob.price.toFixed(4)}`).join(', ') || 'None';
+
+     finalPrompt += `
+
+${hunterContext}
+
+SMC & PRICE ACTION DATA:
+1H STRUCTURAL RESISTANCES (Swing Highs): ${recentResistances}
+1H STRUCTURAL SUPPORTS (Swing Lows): ${recentSupports}
+15m RECENT ORDER BLOCKS (FVG Magnet Zones): ${recentOBs}
+LATEST 15m CANDLE ANATOMY: ${recentCandleAnalysis}
+
+TECHNICAL INDICATORS:
+15m: EMA20=${ema20_15m} EMA50=${ema50_15m} RSI=${rsi_15m} MACDhist=${macd_15m.histogram.toFixed(4)} ADX=${adx_15m}
+1H: Trend=${trend_1h} EMA20=${ema20_1h} EMA50=${ema50_1h}
+ORDERBOOK IMBALANCE: ${obImbalance}
+
+SMC EXECUTION RULES (V2):
+1. Market Structure ALWAYS wins. Do not trade against 1H Trend (${trend_1h}).
+2. SL PLACEMENT: Must be placed just strictly behind a logical Structural Support/Resistance listed above. DO NOT use mathematical ATR for SL. Protect behind liquidity walls.
+3. TP PLACEMENT: Must target the next opposing Resistance/Support or Order Block.
+4. If trading halfway between zones (mid-range), you must set 'entry_urgency' to 'WAIT_PULLBACK' and specify a 'pullback_pct' to enter exactly at the Support/OB.
+5. If rejecting at resistance with a Bearish Pin Bar, strong SHORT edge.
+6. Minimum Risk/Reward visually must be >= 1.5. If the nearest Support is closer than the nearest Resistance on a LONG, SKIP.
+
+JSON only, no markdown:
+{"action":"LONG"|"SHORT"|"SKIP","confidence":0-100,"reasoning":"max 20 words","entry_urgency":"MARKET"|"WAIT_PULLBACK","pullback_pct":number|null,"entry_price":number|null,"stop_loss":number|null,"take_profit":number|null,"leverage":1|2|3,"risk_reward":number|null,"key_signal":"max 10 words","estimated_duration":"1-2h"|"2-4h"|"4-8h"|null}
+`;
+  }
+
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
   const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
   const AI_MODEL = process.env.AI_MODEL || 'google/gemini-2.5-flash-lite-preview-06-17';
@@ -571,7 +686,7 @@ JSON only, no markdown:
       },
       body: JSON.stringify({
         model: AI_MODEL,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: finalPrompt }],
         temperature: 0.1,
         max_tokens: 500
       })

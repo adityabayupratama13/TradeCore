@@ -69,7 +69,7 @@ export async function manageOpenPositions() {
         // 2. Close 30% of position
         const closeQty = trade.quantity * 0.30;
         const roundedQty = await roundQuantity(trade.symbol, closeQty);
-        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: true }).catch(err => console.error(err));
+        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty, reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_1: ${roundedQty} ${trade.symbol}`);
 
         // 3. Update milestone state
@@ -78,7 +78,7 @@ export async function manageOpenPositions() {
 
         // 4. Telegram alert
         await sendTelegramAlert({
-          type: 'MILESTONE_HIT',
+          type: 'PARTIAL_TP',
           data: { symbol: trade.symbol, direction: trade.direction, milestone: 1, profitPct: profitPct.toFixed(1), action: 'SL moved to BEP + 30% closed' }
         });
       }
@@ -90,14 +90,14 @@ export async function manageOpenPositions() {
         const oppSide = isLong ? 'SELL' : 'BUY';
         const closeQty = trade.quantity * 0.30;
         const roundedQty = await roundQuantity(trade.symbol, closeQty);
-        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty.toString(), reduceOnly: true }).catch(err => console.error(err));
+        await placeOrder({ symbol: trade.symbol, side: oppSide, type: 'MARKET', quantity: roundedQty, reduceOnly: true }).catch(err => console.error(err));
         console.log(`💰 Partial close MILESTONE_2: ${roundedQty} ${trade.symbol}`);
 
         milestones.milestone2Hit = true;
         await prisma.appSettings.upsert({ where: { key: milestoneKey }, update: { value: JSON.stringify(milestones) }, create: { key: milestoneKey, value: JSON.stringify(milestones) } });
 
         await sendTelegramAlert({
-          type: 'MILESTONE_HIT',
+          type: 'PARTIAL_TP',
           data: { symbol: trade.symbol, direction: trade.direction, milestone: 2, profitPct: profitPct.toFixed(1), action: 'Another 30% closed. 40% remaining.' }
         });
       }
@@ -236,7 +236,11 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       return;
     }
 
-    console.log(`🔍 Analyzing ${availablePairs.length} pairs via AI... (Mode: ${riskRule?.activeMode || 'SAFE'})`);
+    // Fetch Engine Version (default v1)
+    const versionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+    const engineVersion = versionSetting?.value || 'v1';
+
+    console.log(`🔍 Analyzing ${availablePairs.length} pairs via AI (Engine: ${engineVersion.toUpperCase()}) (Mode: ${riskRule?.activeMode || 'SAFE'})...`);
     
     // FIX: Batch AI thinking to prevent SQLite Database Connection Timouts (locking) & Rate limits
     const chunkSize = 4;
@@ -248,7 +252,12 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
         
         const aiPromises = batch.map(async (pair: any) => {
             try {
-                return await analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE');
+                return await analyzeMarket(
+                    pair.symbol, 
+                    pair.symbol === symbol ? triggerData : null, 
+                    riskRule?.activeMode || 'SAFE',
+                    engineVersion
+                );
             } catch (err: any) {
                 console.error(`[Engine] Error analyzing ${pair.symbol}:`, err.message);
                 return null;
