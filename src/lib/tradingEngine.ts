@@ -502,11 +502,15 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
       }
     });
 
-    if (tradesTodaySymbol >= 3) {
-        console.log(`❌ Max 3 trades per day reached for ${symbol}. Skipping.`);
-        await logEngine({ symbol, action: signal.action, result: 'BLOCKED', reason: `MAX_TRADES_PER_SYMBOL (3) reached today for ${symbol}` });
+    const maxTradesSettingSymbol = await prisma.appSettings.findUnique({ where: { key: 'max_trades_per_symbol' } });
+    const maxTradesPerSymbol = parseInt(maxTradesSettingSymbol?.value || '3');
+
+    if (tradesTodaySymbol >= maxTradesPerSymbol) {
+        console.log(`❌ Max ${maxTradesPerSymbol} trades per day reached for ${symbol}. Skipping.`);
+        await logEngine({ symbol, action: signal.action, result: 'BLOCKED', reason: `MAX_TRADES_PER_SYMBOL (${maxTradesPerSymbol}) reached today for ${symbol}` });
         return;
     }
+
     
     // Check bypassed
 

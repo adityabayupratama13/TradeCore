@@ -11,6 +11,7 @@ export function RiskRulesForm() {
   const [targetUsd, setTargetUsd] = useState<number>(350);
   const [maxHoldHours, setMaxHoldHours] = useState<number>(16);
   const [maxDriftPct, setMaxDriftPct] = useState<number>(0.8);
+  const [maxTradesPerSymbol, setMaxTradesPerSymbol] = useState<number>(3);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
@@ -34,6 +35,9 @@ export function RiskRulesForm() {
     }).catch(() => {});
     fetch('/api/settings?key=max_entry_drift_pct').then(res => res.json()).then(data => {
       if (data.value) setMaxDriftPct(parseFloat(data.value) || 0.8);
+    }).catch(() => {});
+    fetch('/api/settings?key=max_trades_per_symbol').then(res => res.json()).then(data => {
+      if (data.value) setMaxTradesPerSymbol(parseInt(data.value) || 3);
     }).catch(() => {});
   }, [status?.rules, (status as any)?.dailyProfitTarget]);
 
@@ -139,6 +143,12 @@ export function RiskRulesForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: 'max_entry_drift_pct', value: maxDriftPct })
+      });
+      // Save max trades per symbol
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'max_trades_per_symbol', value: maxTradesPerSymbol })
       });
       
       const data = await res.json();
@@ -445,6 +455,11 @@ export function RiskRulesForm() {
                         <label className="text-xs text-yellow-400/80">⚡ Max Entry Drift % (stale signal filter)</label>
                         <input type="number" min={0.1} max={5} step={0.1} value={maxDriftPct} onChange={(e) => setMaxDriftPct(parseFloat(e.target.value))} className="bg-[#0A0E1A] border border-yellow-900/50 focus:border-yellow-500 rounded p-2 text-white outline-none" />
                         <span className="text-[10px] text-gray-500">Skip entry jika harga bergerak &gt; X% dari harga AI (default: 0.8%)</span>
+                      </div>
+                     <div className="flex flex-col gap-1">
+                        <label className="text-xs text-purple-400/80">🔄 Max Trades Per Symbol / Hari</label>
+                        <input type="number" min={1} max={10} step={1} value={maxTradesPerSymbol} onChange={(e) => setMaxTradesPerSymbol(parseInt(e.target.value))} className="bg-[#0A0E1A] border border-purple-900/50 focus:border-purple-500 rounded p-2 text-white outline-none" />
+                        <span className="text-[10px] text-gray-500">Maks berapa kali satu symbol bisa di-trade per hari (default: 3)</span>
                       </div>
                      <div className="flex flex-col gap-1">
                        <label className="text-xs text-red-500/70">Max Daily Loss %</label>
