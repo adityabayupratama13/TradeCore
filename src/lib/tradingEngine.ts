@@ -478,7 +478,45 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
         return; 
     }
 
-    // NEW FIX 3: DYNAMIC POSITION SIZING
+    // ─────────────────────────────────────────────────────────────────
+    // PRICE DRIFT VALIDATION — Cegah "stale signal entry" yang langsung SL
+    // Jika harga saat ini sudah bergerak terlalu jauh dari harga yg AI analisa,
+    // skip trade karena kondisi pasar sudah berubah
+    // ─────────────────────────────────────────────────────────────────
+    try {
+      const currentMarkObj = await getMarkPrice(symbol);
+      const currentMark = currentMarkObj.markPrice;
+      const aiEntryPrice = signal.entryPrice;
+      const driftPct = ((currentMark - aiEntryPrice) / aiEntryPrice) * 100;
+      const MAX_DRIFT_PCT = 0.8; // maks 0.8% drift diperbolehkan
+
+      // Untuk LONG: jika harga naik jauh (> MAX_DRIFT) = sudah telat masuk = overpriced
+      // Untuk SHORT: jika harga turun jauh (< -MAX_DRIFT) = sudah telat masuk = kita akan short di harga lebih rendah
+      const isStale = signal.action === 'LONG'
+        ? driftPct > MAX_DRIFT_PCT    // harga sudah naik, LONG jadi mahal
+        : driftPct < -MAX_DRIFT_PCT;  // harga sudah turun, SHORT jadi terlalu dalam
+
+      if (isStale) {
+        const dir = driftPct > 0 ? '+' : '';
+        console.log(`⚠️ [STALE SIGNAL] ${symbol} ${signal.action} — Price drift: ${dir}${driftPct.toFixed(2)}% (max ${MAX_DRIFT_PCT}%). AI entry: ${aiEntryPrice}, Current: ${currentMark}. SKIPPING to avoid immediate SL.`);
+        await logEngine({
+          symbol,
+          action: signal.action,
+          signal,
+          result: 'IGNORED',
+          reason: `Stale signal: price drifted ${dir}${driftPct.toFixed(2)}% since AI analysis (max allowed: ${MAX_DRIFT_PCT}%). Entry price stale.`
+        });
+        return;
+      }
+
+      // Update signal.entryPrice ke harga sekarang jika masih dalam range (lebih akurat)
+      signal.entryPrice = currentMark;
+      console.log(`✅ [PRICE CHECK] ${symbol} drift: ${driftPct > 0 ? '+' : ''}${driftPct.toFixed(3)}% — OK, using current mark: ${currentMark}`);
+    } catch (driftErr) {
+      console.error(`[PriceCheck] Could not verify drift for ${symbol}, proceeding with AI price:`, driftErr);
+    }
+
+
     const positionDetails = await calculatePositionSize(
       symbol, signal.entryPrice, signal.stopLoss, signal.action === 'LONG' ? 'BUY' : 'SELL', totalWalletBalance, signal.confidence
     );
