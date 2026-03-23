@@ -239,19 +239,28 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       return;
     }
 
-    console.log(`🔍 Analyzing ${availablePairs.length} pairs concurrently via AI... (Mode: ${riskRule?.activeMode || 'SAFE'})`);
+    console.log(`🔍 Analyzing ${availablePairs.length} pairs via AI... (Mode: ${riskRule?.activeMode || 'SAFE'})`);
     
-    // DECOUPLED: Run all AI thinking in PARALLEL (Super Fast, No DB locking!)
-    const aiPromises = availablePairs.map(async (pair: any) => {
-        try {
-            return await analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE');
-        } catch (err: any) {
-            console.error(`[Engine] Error analyzing ${pair.symbol}:`, err.message);
-            return null;
-        }
-    });
-
-    const results = await Promise.all(aiPromises);
+    // FIX: Batch AI thinking to prevent SQLite Database Connection Timouts (locking) & Rate limits
+    const chunkSize = 4;
+    const results: any[] = [];
+    
+    for (let i = 0; i < availablePairs.length; i += chunkSize) {
+        const batch = availablePairs.slice(i, i + chunkSize);
+        console.log(`   Processing AI batch ${Math.floor(i/chunkSize) + 1}/${Math.ceil(availablePairs.length/chunkSize)}...`);
+        
+        const aiPromises = batch.map(async (pair: any) => {
+            try {
+                return await analyzeMarket(pair.symbol, pair.symbol === symbol ? triggerData : null, riskRule?.activeMode || 'SAFE');
+            } catch (err: any) {
+                console.error(`[Engine] Error analyzing ${pair.symbol}:`, err.message);
+                return null;
+            }
+        });
+        
+        const batchResults = await Promise.all(aiPromises);
+        results.push(...batchResults);
+    }
     const signals: any[] = results.filter(s => s !== null);
 
     // FIX: Log ALL signals to history, even if SKIP or low confidence, for debugging visibility
