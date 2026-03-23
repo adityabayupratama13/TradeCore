@@ -1,4 +1,4 @@
-import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity } from './binance';
+import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity, getOpenAlgoOrders } from './binance';
 import { FALLBACK_PAIRS, MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
 import { analyzeMarket, calculateATR } from './aiEngine';
 import { syncPositions } from './positionSync';
@@ -152,7 +152,38 @@ export async function manageOpenPositions() {
         });
       }
 
+      // ─────────────────────────────────────────────────────────────────
+      // TP AUTO-RESTORE — Cek dan re-place TP jika hilang (misal setelah partial close)
+      // Binance kadang auto-cancel TP algo saat posisi size berubah
+      // ─────────────────────────────────────────────────────────────────
+      if (trade.tpAlgoId && trade.takeProfit) {
+        try {
+          const algoOrders = await getOpenAlgoOrders(trade.symbol);
+          const tpStillActive = algoOrders?.orders?.some((o: any) =>
+            String(o.algoId) === String(trade.tpAlgoId) || o.type === 'TAKE_PROFIT_MARKET'
+          );
+          if (!tpStillActive) {
+            console.log(`⚠️ [TP RESTORE] ${trade.symbol} TP algo gone! Re-placing TP at ${trade.takeProfit}`);
+            const oppSide = isLong ? 'SELL' : 'BUY';
+            const roundedTP = await roundPrice(trade.symbol, trade.takeProfit);
+            const newTp = await placeAlgoOrder({
+              algoType: 'CONDITIONAL', symbol: trade.symbol, side: oppSide,
+              type: 'TAKE_PROFIT_MARKET', triggerPrice: roundedTP.toString(),
+              closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'FALSE', timeInForce: 'GTC'
+            });
+            if (newTp?.algoId) {
+              await prisma.trade.update({ where: { id: trade.id }, data: { tpAlgoId: newTp.algoId.toString() } });
+              await logEngine({ symbol: trade.symbol, action: 'TP_RESTORE', result: 'EXECUTED', reason: `TP algo was missing, re-placed at ${roundedTP}` });
+              console.log(`✅ [TP RESTORE] ${trade.symbol} TP restored at ${roundedTP} (algoId: ${newTp.algoId})`);
+            }
+          }
+        } catch (tpErr: any) {
+          console.error(`[TP RESTORE] Failed for ${trade.symbol}:`, tpErr.message);
+        }
+      }
+
       // RULE 4: MAX HOLD (configurable dari UI, default 16 jam WIB)
+
       const maxHoldSetting = await prisma.appSettings.findUnique({ where: { key: 'max_hold_hours' } });
       const maxHold = maxHoldSetting?.value ? parseInt(maxHoldSetting.value) : 16;
       if (holdHours >= maxHold) {
