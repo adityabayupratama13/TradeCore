@@ -51,8 +51,7 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    // Fetch top bar statuses
+  const fetchStatus = () => {
     Promise.all([
       fetch('/api/portfolio').then(res => res.json()),
       fetch('/api/performance/today').then(res => res.json()),
@@ -73,6 +72,13 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
         engineVersion: engine?.version || 'v1'
       });
     }).catch(console.error);
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    // Auto-refresh setiap 30 detik agar Today P&L dan Capital selalu update
+    const refreshInterval = setInterval(fetchStatus, 30_000);
+    return () => clearInterval(refreshInterval);
   }, []);
 
 
