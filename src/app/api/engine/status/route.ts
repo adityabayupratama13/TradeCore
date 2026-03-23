@@ -144,9 +144,10 @@ export async function GET() {
       }));
 
     // Find coins that hit MAX_TRADES_PER_SYMBOL today
-    // FIX #2: Hardcode ke 3 sesuai logika engine di tradingEngine.ts (baris 406)
-    // maxOpenPositions adalah jumlah posisi terbuka bersamaan, BUKAN batas trade harian per simbol
-    const maxTradesPerSymbol = 3;
+    // Baca dari AppSettings agar konsisten dengan setting di Risk Manager UI
+    const maxTradesSettingCheck = await prisma.appSettings.findUnique({ where: { key: 'max_trades_per_symbol' } });
+    const maxTradesPerSymbol = parseInt(maxTradesSettingCheck?.value || '3');
+
     const tradesBySymbol: Record<string, number> = {};
 
     todayTrades.forEach((t: any) => {
