@@ -1,6 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const key = searchParams.get('key');
+    if (!key) return NextResponse.json({ error: 'Missing key' }, { status: 400 });
+    const setting = await prisma.appSettings.findUnique({ where: { key } });
+    return NextResponse.json({ key, value: setting?.value ?? null });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { key, value } = await req.json();
