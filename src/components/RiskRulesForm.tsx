@@ -15,15 +15,17 @@ export function RiskRulesForm() {
   const [showOverride, setShowOverride] = useState(false);
   const [showDegenModal, setShowDegenModal] = useState(false);
   const [degenInput, setDegenInput] = useState("");
+  
+  const [engineVer, setEngineVer] = useState<'v1'|'v2'>('v1');
+  const [isEngineSaving, setIsEngineSaving] = useState(false);
 
   useEffect(() => {
-    if (status?.rules) {
-      setFormData(status.rules);
-    }
-    if (status?.dailyProfitTarget !== undefined) {
-      setTargetUsd(status.dailyProfitTarget);
-    }
-  }, [status?.rules, status?.dailyProfitTarget]);
+    if (status?.rules) setFormData(status.rules);
+    if ((status as any)?.dailyProfitTarget !== undefined) setTargetUsd((status as any).dailyProfitTarget);
+    fetch('/api/engine/version').then(res => res.json()).then(data => {
+      if (data.version) setEngineVer(data.version);
+    }).catch(e => console.error(e));
+  }, [status?.rules, (status as any)?.dailyProfitTarget]);
 
   if (!status?.rules) return <div className="h-96 animate-pulse bg-[#0E1628] rounded-xl" />;
 
@@ -82,10 +84,28 @@ export function RiskRulesForm() {
     }
   };
 
+  const changeEngine = async (ver: 'v1'|'v2') => {
+    if (ver === engineVer) return;
+    setIsEngineSaving(true);
+    try {
+      const res = await fetch('/api/engine/version', { 
+        method: 'POST', body: JSON.stringify({ version: ver }), headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        setEngineVer(ver);
+        showToastMsg(`✅ AI Engine diubah ke ${ver === 'v2' ? 'V2' : 'V1'}`, 'success');
+      }
+    } catch(e) {
+      showToastMsg(`❌ Gagal mengubah AI Engine`, 'error');
+    } finally {
+      setIsEngineSaving(false);
+    }
+  };
+
   const saveOverrides = async () => {
     setIsSaving(true);
     try {
-      // Save risk rules
+      // Overrides simply patch the risk rules table, leaving activeMode intact, which triggers CUSTOM flag
       const res = await fetch('/api/risk/rules', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -314,10 +334,10 @@ export function RiskRulesForm() {
                  <span className="text-gray-400 text-sm font-bold">Weekly Loss Limit</span>
                  <span className="text-red-400 font-mono text-lg">{formData.maxWeeklyLossPct}%</span>
               </div>
-               <div className="bg-black/40 p-3 rounded border border-red-900/30 flex justify-between items-center">
+              <div className="bg-black/40 p-3 rounded border border-red-900/30 flex justify-between items-center">
                  <span className="text-gray-400 text-sm font-bold">Max Drawdown</span>
                  <span className="text-pink-500 font-mono text-lg">{formData.maxDrawdownPct}%</span>
-               </div>
+              </div>
             </div>
 
             <div className="mt-4 pt-4 border-t border-green-900/30">
@@ -342,8 +362,36 @@ export function RiskRulesForm() {
          </button>
 
          {showOverride && (
-           <div className="p-6 border-t border-[#1a2540] space-y-6">
+           <div className="p-6 border-t border-[#1a2540] space-y-8">
               <div className="mb-4 text-sm text-gray-400">Mengubah nilai di sini tidak mengubah mode. Selector akan menampilkan 'Custom'.</div>
+              
+              {/* Engine Override */}
+              <div className="bg-[#0A0E1A] border border-[#1a2540] rounded-lg p-5 flex items-center justify-between">
+                <div>
+                  <h4 className="text-white font-bold mb-1 flex items-center gap-2"><Zap className="w-4 h-4 text-purple-400"/> AI Trading Engine</h4>
+                  <p className="text-xs text-gray-500">Pilih inti pemrosesan logika robot saat mencari peluang trading.</p>
+                </div>
+                <div className="flex bg-[#111A2E] rounded-md overflow-hidden border border-[#1a2540]">
+                  <button
+                    onClick={() => changeEngine('v1')}
+                    disabled={isEngineSaving}
+                    className={`px-4 py-2 text-xs font-bold transition-all ${
+                      engineVer === 'v1' ? 'bg-[#3b82f6] text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ⚡ V1 (RSI Momentum)
+                  </button>
+                  <button
+                    onClick={() => changeEngine('v2')}
+                    disabled={isEngineSaving}
+                    className={`px-4 py-2 text-xs font-bold transition-all ${
+                      engineVer === 'v2' ? 'bg-[#a855f7] text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🚀 V2 (Smart Money Concepts)
+                  </button>
+                </div>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                  {/* Position specific Overrides */}
@@ -351,8 +399,8 @@ export function RiskRulesForm() {
                     <h4 className="text-gray-500 font-bold uppercase text-xs border-b border-[#1a2540] pb-2">Limits & Core</h4>
                     
                     <div className="flex flex-col gap-1 mb-3">
-                      <label className="text-xs text-green-400 font-bold flex items-center gap-1">🎯 Daily Profit Target (USD)</label>
-                      <input type="number" value={targetUsd} onChange={(e) => setTargetUsd(parseFloat(e.target.value))} className="bg-[#0A0E1A] border border-green-900/50 focus:border-green-500 rounded p-2 text-white outline-none" />
+                      <label className="text-xs text-emerald-400 font-bold flex items-center gap-1">🎯 Daily Profit Target (USD)</label>
+                      <input type="number" value={targetUsd} onChange={(e) => setTargetUsd(parseFloat(e.target.value))} className="bg-[#0A0E1A] border border-emerald-900/50 focus:border-emerald-500 rounded p-2 text-white outline-none" />
                     </div>
 
                     <div className="flex flex-col gap-1">

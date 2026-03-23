@@ -283,7 +283,8 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
           leverage: s.leverage || 1,
           riskReward: s.riskReward || 0,
           keySignal: s.keySignal || 'N/A',
-          wasExecuted: false
+          wasExecuted: false,
+          engineVersion: engineVersion
         }
       }).catch(err => console.error("Error saving signal history", err));
     }
@@ -304,7 +305,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     console.log(`✅ Valid signals: ${validSignals.length} (>=${minConf}%). Executing up to ${availableSlots}...`);
 
     for (let i = 0; i < Math.min(validSignals.length, availableSlots); i++) {
-        await executeTradeSignal(validSignals[i], portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule);
+        await executeTradeSignal(validSignals[i], portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule, engineVersion);
         await sleep(1000);
     }
 
@@ -341,7 +342,7 @@ async function checkSufficientMargin(requiredMargin: number): Promise<boolean> {
   return true;
 }
 
-async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any, isFromPending = false) {
+async function executeTradeSignal(signal: any, portfolio: any, availableBalance: number, totalWalletBalance: number, isTestMode: boolean, riskRule: any, engineVersion: string, isFromPending = false) {
     const symbol = signal.symbol;
 
     if (signal.entryUrgency === 'WAIT_PULLBACK' && !isFromPending) {
@@ -356,7 +357,8 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
             symbol, direction: signal.action, confidence: signal.confidence,
             entryPrice: signal.entryPrice, targetPrice,
             stopLoss: signal.stopLoss, takeProfit: signal.takeProfit,
-            leverage: signal.leverage, timestamp: Date.now()
+            leverage: signal.leverage, timestamp: Date.now(),
+            engineVersion: engineVersion
         };
         
         await prisma.$transaction(async (tx) => {
@@ -514,7 +516,8 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
           quantity,
           leverage: signal.leverage,
           slAlgoId: res.slAlgoId?.toString(),
-          tpAlgoId: res.tpAlgoId?.toString()
+          tpAlgoId: res.tpAlgoId?.toString(),
+          engineVersion: engineVersion
         }
       });
 
@@ -610,7 +613,7 @@ async function processPendingSignals() {
               };
               
               const isTestMode = process.env.ENGINE_TEST_MODE === 'true';
-              await executeTradeSignal(mockSignal, portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule, true);
+              await executeTradeSignal(mockSignal, portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule, sig.engineVersion || 'v1', true);
               sig.executed = true;
               executedCount++;
            }
