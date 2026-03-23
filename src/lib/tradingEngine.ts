@@ -161,11 +161,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       return;
     }
 
-    const maxPosLimit = parseInt(process.env.MAX_CONCURRENT_POSITIONS || '3');
-    const dbOpenCount = await prisma.trade.count({ where: { status: 'OPEN' } });
-    
-    if (dbOpenCount >= maxPosLimit) return;
-    
+    // UI RiskRule settings dictate max positions further down
     const currentPositions = await getPositions();
     const currentSymbols = new Set(currentPositions.map((p: any) => p.symbol));
 
