@@ -248,14 +248,19 @@ export default function PerformancePage() {
 
 // Local wrapper to isolate the graph fetch properly without modifying the big hook
 function EquityChartWrapper() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<any[] | null>(null);
   
   useEffect(() => {
     fetch('/api/performance/equity-curve?range=ALL')
       .then(r => r.json())
-      .then(d => setData(d));
+      .then(d => {
+         if (Array.isArray(d)) setData(d);
+         else setData([]);
+      })
+      .catch(() => setData([]));
   }, []);
 
   if (!data) return <div className="h-[320px] bg-[#0E1628] animate-pulse rounded-xl" />;
+  if (data.length === 0) return <div className="h-[320px] bg-[#0E1628] border border-[#1a2540] rounded-xl flex items-center justify-center text-gray-500 text-sm font-bold tracking-widest uppercase">No curve data found</div>;
   return <EquityChartComponent data={data} />;
 }

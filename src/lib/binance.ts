@@ -8,6 +8,26 @@ function sign(queryString: string): string {
   return CryptoJS.HmacSHA256(queryString, SECRET).toString(CryptoJS.enc.Hex);
 }
 
+let timeOffset = 0;
+let hasSyncedTime = false;
+
+export async function syncTimeOffset() {
+  try {
+    const start = Date.now();
+    const res = await fetch(`${BASE_URL}/fapi/v1/time`, { cache: 'no-store' }).then(r => r.json());
+    const end = Date.now();
+    const latency = Math.floor((end - start) / 2);
+    timeOffset = res.serverTime - Date.now() - latency;
+    hasSyncedTime = true;
+    console.log(`[Binance] Time offset synced: ${timeOffset}ms`);
+  } catch (err) {
+    console.error('Failed to sync Binance time', err);
+  }
+}
+
+// Initial sync on load
+syncTimeOffset();
+
 export interface SymbolPrecision {
   symbol: string;
   pricePrecision: number;
@@ -86,7 +106,10 @@ export async function roundQuantity(symbol: string, qty: number): Promise<number
 }
 
 async function fetchBinance(endpoint: string, method: string = 'GET', data: any = {}) {
-  const timestamp = Date.now();
+  if (!hasSyncedTime) {
+    await syncTimeOffset();
+  }
+  const timestamp = Date.now() + timeOffset;
   const params = new URLSearchParams({ ...data, timestamp: String(timestamp) }).toString();
   const signature = sign(params);
   
@@ -103,6 +126,7 @@ async function fetchBinance(endpoint: string, method: string = 'GET', data: any 
   const response = await fetch(url, {
     method,
     headers,
+    cache: 'no-store',
     body: method !== 'GET' ? `${params}&signature=${signature}` : undefined
   });
 

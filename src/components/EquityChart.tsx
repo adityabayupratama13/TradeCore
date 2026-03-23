@@ -9,13 +9,14 @@ export function EquityChartComponent({ data }: { data: { time: string, value: nu
   const chartInstanceRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const [range, setRange] = useState<'1W' | '1M' | '3M' | 'ALL'>('ALL');
-  const [chartData, setChartData] = useState(data);
+  const safeData = Array.isArray(data) ? data : [];
+  const [chartData, setChartData] = useState(safeData);
 
   useEffect(() => {
     // Initial fetch for actual range filter happens from API if we want, OR we just filter the passed data.
     const filterData = () => {
-      if (range === 'ALL' || data.length === 0) return data;
-      const lastDateStr = data[data.length - 1].time;
+      if (range === 'ALL' || safeData.length === 0) return safeData;
+      const lastDateStr = safeData[safeData.length - 1].time;
       const d = new Date(lastDateStr);
       
       if (range === '1W') d.setDate(d.getDate() - 7);
@@ -23,7 +24,7 @@ export function EquityChartComponent({ data }: { data: { time: string, value: nu
       else if (range === '3M') d.setMonth(d.getMonth() - 3);
 
       const cutoff = d.toISOString().split('T')[0];
-      return data.filter(pt => pt.time >= cutoff);
+      return safeData.filter(pt => pt.time >= cutoff);
     };
     
     setChartData(filterData());
