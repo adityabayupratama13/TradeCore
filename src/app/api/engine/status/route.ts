@@ -12,7 +12,9 @@ export async function GET() {
     const lastRunRaw = await prisma.appSettings.findUnique({ where: { key: 'watcher_last_run' } });
     
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // FIX #1: Gunakan timezone WIB (Asia/Jakarta) agar konsisten dengan logika engine di tradingEngine.ts
+    const nowWIB = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    const startOfDay = new Date(Date.UTC(nowWIB.getFullYear(), nowWIB.getMonth(), nowWIB.getDate()) - (7 * 3600 * 1000));
 
     const watcherStatus: any = {};
     const lastWatcherTime = lastRunRaw?.value ? new Date(lastRunRaw.value).getTime() : 0;
@@ -126,8 +128,9 @@ export async function GET() {
       }));
 
     // Find coins that hit MAX_TRADES_PER_SYMBOL today
-    const activeRiskRule = await prisma.riskRule.findFirst();
-    const maxTradesPerSymbol = activeRiskRule?.maxOpenPositions || 3;
+    // FIX #2: Hardcode ke 3 sesuai logika engine di tradingEngine.ts (baris 406)
+    // maxOpenPositions adalah jumlah posisi terbuka bersamaan, BUKAN batas trade harian per simbol
+    const maxTradesPerSymbol = 3;
     const tradesBySymbol: Record<string, number> = {};
 
     todayTrades.forEach((t: any) => {
