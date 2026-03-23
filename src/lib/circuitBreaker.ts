@@ -1,7 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { cancelAllOrders, getPositions } from './binance';
 import { sendTelegramAlert } from './telegram';
-import { SAFE_UNIVERSE } from './constants';
 
 export interface CircuitBreakerStatus {
   canTrade: boolean;

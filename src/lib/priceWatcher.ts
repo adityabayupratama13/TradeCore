@@ -2,7 +2,8 @@ import { getKlines, getMarkPrice } from './binance';
 import { prisma } from '../../lib/prisma';
 import { executeAIAndTrade } from './tradingEngine';
 import { calculateEMA, calculateRSI, calculateVolumeProfile, calculateADX } from './aiEngine';
-import { SAFE_UNIVERSE, FALLBACK_PAIRS } from './constants';
+import { FALLBACK_PAIRS } from './constants';
+
 
 export interface TriggerResult {
   triggered: boolean;

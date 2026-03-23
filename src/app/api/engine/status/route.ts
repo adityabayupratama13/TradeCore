@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { getEngineStatus } from '../../../../../src/lib/engineScheduler';
 import { getPositions, getOpenAlgoOrders } from '../../../../../src/lib/binance';
-import { SAFE_UNIVERSE } from '../../../../../src/lib/constants';
+import { FALLBACK_PAIRS } from '../../../../../src/lib/constants';
+
 
 export async function GET() {
   try {

@@ -1,11 +1,10 @@
 import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity } from './binance';
-import { SAFE_UNIVERSE } from './constants';
+import { FALLBACK_PAIRS, MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
 import { analyzeMarket, calculateATR } from './aiEngine';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
-import { MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
 import { getCoinCategory } from './coinCategories';
 
 let cycleNumber = 0;
@@ -153,17 +152,18 @@ export async function manageOpenPositions() {
         });
       }
 
-      // RULE 4: MAX HOLD
-      const maxHold = parseInt(process.env.MAX_HOLD_HOURS || '8');
+      // RULE 4: MAX HOLD (configurable dari UI, default 16 jam WIB)
+      const maxHoldSetting = await prisma.appSettings.findUnique({ where: { key: 'max_hold_hours' } });
+      const maxHold = maxHoldSetting?.value ? parseInt(maxHoldSetting.value) : 16;
       if (holdHours >= maxHold) {
          if (profitPct > 0) {
              await closePosition(trade.symbol, trade.quantity);
              await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnlPct: profitPct } });
              await checkAndEnforceCircuitBreaker();
-             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: 'Max hold 8h reached', pnl: profitRaw * trade.quantity, pnlPct: profitPct.toFixed(2), holdDuration: '8h' }});
+             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: `Max hold ${maxHold}h reached`, pnl: profitRaw * trade.quantity, pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
              continue;
          } else {
-             await logEngine({ symbol: trade.symbol, action: 'MAX_HOLD', result: 'IGNORED', reason: 'In loss, letting SL work naturally' });
+             await logEngine({ symbol: trade.symbol, action: 'MAX_HOLD', result: 'IGNORED', reason: `In loss (${profitPct.toFixed(1)}%), letting SL work naturally` });
          }
       }
 
@@ -340,13 +340,14 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       }).catch(err => console.error("Error saving signal history", err));
     }
 
-    const minConf = 75; // hard minimum regardless of mode
+    // Gunakan minConfidence dari riskRule (configurable dari UI Risk Manager)
+    const minConf = Math.max(dynamicMinConf, riskRule?.minConfidence ?? 70);
 
     const validSignals = signals
       .filter(s => {
          if (s.action === 'SKIP') return false;
          if (s.confidence < minConf) {
-            console.log(`⏭️ Min confidence: 75. Actual ${s.confidence}. Skip.`);
+            console.log(`⏭️ Min confidence: ${minConf}%. Actual ${s.confidence}%. Skip.`);
             return false;
          }
          return true;
@@ -354,6 +355,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       .sort((a, b) => b.confidence - a.confidence);
 
     console.log(`✅ Valid signals: ${validSignals.length} (>=${minConf}%). Executing up to ${availableSlots}...`);
+
 
     for (let i = 0; i < Math.min(validSignals.length, availableSlots); i++) {
         await executeTradeSignal(validSignals[i], portfolio, availableBalance, totalWalletBalance, isTestMode, riskRule, engineVersion);

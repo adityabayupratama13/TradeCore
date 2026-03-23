@@ -165,7 +165,38 @@ export async function startTelegramListener() {
                      const timeStr = resumeTime.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
                      await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⏸️ Engine paused until ${timeStr} WIB` } } as any);
                      setTimeout(() => { startEngine(); }, 2 * 3600000);
-                  }
+                  } else if (cmd.startsWith('/set_hold ')) {
+                     const hrs = parseInt(cmd.replace('/set_hold ', '').trim());
+                     if (!isNaN(hrs) && hrs >= 1 && hrs <= 72) {
+                        await prisma.appSettings.upsert({ where: { key: 'max_hold_hours' }, update: { value: String(hrs) }, create: { key: 'max_hold_hours', value: String(hrs) }});
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `⏱️ Max hold (profit trades) diubah ke ${hrs} jam` } } as any);
+                     } else {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `❌ Nilai tidak valid. Gunakan antara 1-72 jam.\nContoh: /set_hold 16` } } as any);
+                     }
+                  } else if (cmd === '/help') {
+                     const helpText = `🤖 *TradeCore Bot — Daftar Command*
+
+📊 *Informasi*
+/status — Cek status engine (running/stopped)
+/positions — Lihat semua posisi terbuka saat ini
+
+⚙️ *Kontrol Engine*
+/start — Nyalakan engine
+/stop — Matikan engine (emergency)
+/pause\\_2h — Pause engine selama 2 jam lalu auto-restart
+
+💰 *Pengaturan Trading*
+/set\\_target [USD] — Ubah target profit harian
+   Contoh: /set\\_target 50
+/set\\_hold [jam] — Ubah max hold profitable trade (1-72 jam)
+   Contoh: /set\\_hold 16
+
+🚨 *Emergency*
+/close\\_all — Tutup SEMUA posisi terbuka
+
+ℹ️ Semua setting juga bisa diubah di menu Risk Manager di dashboard web.`;
+                     await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: helpText } } as any);
+
                }
             }
          }

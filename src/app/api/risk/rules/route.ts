@@ -19,8 +19,10 @@ const rulesSchema = z.object({
   leverageLowCap: z.number().optional(),
   maxLeverageLarge: z.number().optional(),
   maxLeverageMid: z.number().optional(),
-  maxLeverageLow: z.number().optional()
+  maxLeverageLow: z.number().optional(),
+  minConfidence: z.number().min(40).max(100).optional()  // Configurable dari UI
 });
+
 
 export async function PATCH(req: Request) {
   try {

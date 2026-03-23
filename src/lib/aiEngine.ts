@@ -1,7 +1,6 @@
 import { getKlines, getMarkPrice, get24hrTicker, getOrderBook, Kline, roundPrice } from './binance';
 import { prisma } from '../../lib/prisma';
 import { getCoinCategory } from './coinCategories';
-import { SAFE_UNIVERSE } from './constants';
 
 function validateAndFixSignal(
   signal: any, 
@@ -432,8 +431,12 @@ export async function analyzeMarket(symbol: string, triggerData: any = null, act
   const askVolume = orderBook.asks.reduce((acc: number, a: any) => acc + a[1], 0);
   const obImbalance = (bidVolume / (askVolume || 1)).toFixed(2);
 
-  const startOfDay = new Date(new Date().setHours(0,0,0,0));
+  // Fix timezone: gunakan WIB (Asia/Jakarta) agar konteks trade hari ini akurat
+  const nowWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const startOfDay = new Date(nowWIB.getFullYear(), nowWIB.getMonth(), nowWIB.getDate());
+  startOfDay.setHours(startOfDay.getHours() - 7); // Konversi kembali ke UTC untuk query DB
   const todayTrades = await prisma.trade.findMany({ where: { entryAt: { gte: startOfDay } } });
+
   
   let todaySummary = "No trades yet today";
   if (todayTrades.length > 0) {

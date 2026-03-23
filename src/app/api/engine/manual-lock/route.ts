@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
 import { cancelAllOrders } from '../../../../lib/binance';
-import { SAFE_UNIVERSE } from '../../../../lib/constants';
 
 export const dynamic = 'force-dynamic';
 

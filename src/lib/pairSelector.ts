@@ -1,6 +1,5 @@
 import { prisma } from '../../lib/prisma';
 import { fetchOIDataRaw } from './binance';
-import { SAFE_UNIVERSE } from './constants';
 
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
 const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
@@ -200,7 +199,6 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   }
 
   console.log('🦅 Hunter: Starting scan...');
-  console.log('📋 SAFE_UNIVERSE contains:', SAFE_UNIVERSE.size, 'coins');
 
   const [fundingRes, tickerRes] = await Promise.all([
     fetch(`${BINANCE_BASE_URL}/fapi/v1/premiumIndex`),

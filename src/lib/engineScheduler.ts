@@ -68,7 +68,8 @@ export function stopEngine(): void {
     create: { key: 'engine_status', value: 'STOPPED' }
   }).catch(console.error);
 
-  sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "🛑 ENGINE EMERGENCY STOPPED\nWin rate 35.7%, R/R 0.64 — negative EV detected.\nManual review required before restart." } } as any).catch(console.error);
+  sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "🛑 ENGINE STOPPED\nManual stop atau emergency stop aktif.\nCek System Logs untuk detail." } } as any).catch(console.error);
+
 
   console.log('🛑 TradeCore Engine STOPPED');
 }
