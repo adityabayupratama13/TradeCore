@@ -308,17 +308,255 @@ export async function startTelegramListener() {
                      } else {
                         await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '❌ Invalid. Use 1-72.\nExample: /set_hold 16' } } as any);
                      }
+                  } else if (cmd === '/daily') {
+                     // Today P&L summary (WIB timezone)
+                     const nowWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+                     const startWIB = new Date(nowWIB.getFullYear(), nowWIB.getMonth(), nowWIB.getDate());
+                     startWIB.setHours(startWIB.getHours() - 7);
+                     const todayTrades = await prisma.trade.findMany({
+                       where: { entryAt: { gte: startWIB }, status: { not: 'CANCELLED' } }
+                     });
+                     const closed = todayTrades.filter((t: any) => t.status === 'CLOSED');
+                     const open = todayTrades.filter((t: any) => t.status === 'OPEN');
+                     const wins = closed.filter((t: any) => (t.pnl || 0) > 0).length;
+                     const losses = closed.filter((t: any) => (t.pnl || 0) <= 0).length;
+                     const totalPnl = closed.reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+                     const partialLogs = await prisma.engineLog.findMany({
+                       where: { action: 'PARTIAL_CLOSE', createdAt: { gte: startWIB } }
+                     });
+                     const partialPnl = partialLogs.reduce((s: number, l: any) => {
+                       const m = (l.reason || '').match(/Realized PnL: \+?\$?([\d.]+)/);
+                       return s + (m ? parseFloat(m[1]) : 0);
+                     }, 0);
+                     const totalRealized = totalPnl + partialPnl;
+                     const winRate = closed.length > 0 ? ((wins / closed.length) * 100).toFixed(0) : '0';
+                     const lines = [
+                       '📊 TODAY\'S P&L — ' + nowWIB.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+                       '━━━━━━━━━━━━━━',
+                       '📈 Total Trades: ' + todayTrades.length + ' (' + closed.length + ' closed, ' + open.length + ' open)',
+                       '✅ Win: ' + wins + ' | ❌ Loss: ' + losses + ' | 🎯 Win Rate: ' + winRate + '%',
+                       '💵 Closed P&L: ' + (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(2) + ' USD',
+                       '💰 Partial Locked: +' + partialPnl.toFixed(2) + ' USD',
+                       '━━━━━━━━━━━━━━',
+                       '🏆 Total Realized: ' + (totalRealized >= 0 ? '+' : '') + totalRealized.toFixed(2) + ' USD'
+                     ];
+                     await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+
+                  } else if (cmd === '/capital') {
+                     const portfolio = await prisma.portfolio.findFirst();
+                     const riskRule = await prisma.riskRule.findFirst({ where: { isActive: true } });
+                     const cbLock = await prisma.appSettings.findUnique({ where: { key: 'circuit_breaker_lock_until' } });
+                     const locked = cbLock?.value && new Date(cbLock.value) > new Date();
+                     const lines = [
+                       '💰 CAPITAL OVERVIEW',
+                       '━━━━━━━━━━━━━━',
+                       '💵 Total Capital: $' + (portfolio?.totalCapital || 0).toFixed(2),
+                       '🎮 Mode: ' + (riskRule?.activeMode || 'SAFE'),
+                       '📉 Max Drawdown: ' + (riskRule?.maxDrawdownPct || 0) + '%',
+                       '🔒 Circuit Breaker: ' + (locked ? 'LOCKED until ' + new Date(cbLock!.value).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : '✅ OPEN'),
+                       '📦 Max Positions: ' + (riskRule?.maxOpenPositions || 5),
+                       '🎯 Min Confidence: ' + (riskRule?.minConfidence || 65) + '%'
+                     ];
+                     await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+
+                  } else if (cmd === '/target') {
+                     const targetSetting = await prisma.appSettings.findUnique({ where: { key: 'daily_profit_target_usd' } });
+                     const target = parseFloat(targetSetting?.value || '350');
+                     const nowWIB2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+                     const startWIB2 = new Date(nowWIB2.getFullYear(), nowWIB2.getMonth(), nowWIB2.getDate());
+                     startWIB2.setHours(startWIB2.getHours() - 7);
+                     const closedToday = await prisma.trade.findMany({ where: { exitAt: { gte: startWIB2 }, status: 'CLOSED' } });
+                     const pnlClosed = closedToday.reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+                     const partialLogs2 = await prisma.engineLog.findMany({ where: { action: 'PARTIAL_CLOSE', createdAt: { gte: startWIB2 } } });
+                     const pnlPartial = partialLogs2.reduce((s: number, l: any) => {
+                       const m = (l.reason || '').match(/Realized PnL: \+?\$?([\d.]+)/);
+                       return s + (m ? parseFloat(m[1]) : 0);
+                     }, 0);
+                     const realized = pnlClosed + pnlPartial;
+                     const pct = Math.min(Math.round((realized / target) * 100), 100);
+                     const filled = Math.round(pct / 10);
+                     const bar = '[' + '█'.repeat(filled) + '░'.repeat(10 - filled) + '] ' + pct + '%';
+                     const lines = [
+                       '🎯 DAILY TARGET PROGRESS',
+                       '━━━━━━━━━━━━━━',
+                       '📊 ' + bar,
+                       '💵 Realized: $' + realized.toFixed(2) + ' / $' + target.toFixed(2),
+                       '📉 Remaining: $' + Math.max(target - realized, 0).toFixed(2),
+                       realized >= target ? '🏆 TARGET REACHED! Engine locked.' : '⚡ Keep going!'
+                     ];
+                     await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+
+                  } else if (cmd === '/mode') {
+                     const riskRule2 = await prisma.riskRule.findFirst({ where: { isActive: true } });
+                     const verSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+                     const holdSetting = await prisma.appSettings.findUnique({ where: { key: 'max_hold_hours' } });
+                     const lines = [
+                       '🎮 ACTIVE MODE: ' + (riskRule2?.activeMode || 'SAFE'),
+                       '━━━━━━━━━━━━━━',
+                       '🤖 AI Engine: ' + ((verSetting?.value || 'v1').toUpperCase()),
+                       '⏱️ Max Hold Profit: ' + (holdSetting?.value || '16') + ' jam',
+                       '📦 Max Positions: ' + (riskRule2?.maxOpenPositions || 5),
+                       '🎯 Min Confidence: ' + (riskRule2?.minConfidence || 65) + '%',
+                       '━━━━━━━━━━━━━━',
+                       '📊 Risk Per Trade:',
+                       '  🔵 Large Cap (BTC/ETH): ' + (riskRule2?.riskPctLargeCap || 3) + '%',
+                       '  🟣 Mid Cap: ' + (riskRule2?.riskPctMidCap || 3) + '%',
+                       '  🟠 Low Cap: ' + (riskRule2?.riskPctLowCap || 3) + '%',
+                       '⚡ Leverage:',
+                       '  🔵 Large Cap: ' + (riskRule2?.leverageLargeCap || 5) + 'x',
+                       '  🟣 Mid Cap: ' + (riskRule2?.leverageMidCap || 8) + 'x',
+                       '  🟠 Low Cap: ' + (riskRule2?.leverageLowCap || 10) + 'x',
+                       '━━━━━━━━━━━━━━',
+                       '🛑 Daily Loss Limit: ' + (riskRule2?.maxDailyLossPct || 10) + '%',
+                       '🎯 Min TP Target: ' + (riskRule2?.minProfitTargetPct || 6) + '% capital'
+                     ];
+                     await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+
+                  } else if (cmd === '/hunter') {
+                     const hunterSetting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+                     if (!hunterSetting?.value) {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '🦅 Hunter belum scan. Engine perlu running.' } } as any);
+                     } else {
+                        const pairs = JSON.parse(hunterSetting.value);
+                        const pairLines = pairs.slice(0, 15).map((p: any, i: number) => {
+                          const bias = p.biasSide === 'SHORT' ? '🔴' : '🟢';
+                          return (i + 1) + '. ' + bias + ' ' + p.symbol + ' — Funding: ' + ((p.fundingRate || 0) * 100).toFixed(3) + '%';
+                        }).join('\n');
+                        const lines = [
+                          '🦅 DYNAMIC HUNTER — Active Pairs',
+                          '━━━━━━━━━━━━━━',
+                          pairLines,
+                          '━━━━━━━━━━━━━━',
+                          '🟢 = Long bias | 🔴 = Short bias',
+                          '📊 Total: ' + pairs.length + ' pairs aktif'
+                        ];
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+                     }
+
+                  } else if (cmd.startsWith('/signals') || cmd === '/signals') {
+                     const n = parseInt((cmd.split(' ')[1] || '5').trim()) || 5;
+                     const signals = await prisma.tradeSignalHistory.findMany({
+                       orderBy: { createdAt: 'desc' },
+                       take: Math.min(n, 10)
+                     });
+                     if (signals.length === 0) {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '📭 Belum ada sinyal AI.' } } as any);
+                     } else {
+                        const sigLines = signals.map((s: any, i: number) => {
+                          const side = s.action === 'LONG' ? '🟢' : s.action === 'SHORT' ? '🔴' : '⚪';
+                          const ex = s.wasExecuted ? '✅' : '⏭️';
+                          return (i + 1) + '. ' + side + ' ' + s.symbol + ' (' + s.confidence + '%) ' + ex;
+                        }).join('\n');
+                        const lines = [
+                          '🤖 LAST ' + signals.length + ' AI SIGNALS',
+                          '━━━━━━━━━━━━━━',
+                          sigLines,
+                          '━━━━━━━━━━━━━━',
+                          '✅ = Executed | ⏭️ = Skipped'
+                        ];
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+                     }
+
+                  } else if (cmd.startsWith('/logs') || cmd === '/logs') {
+                     const n2 = parseInt((cmd.split(' ')[1] || '5').trim()) || 5;
+                     const logs = await prisma.engineLog.findMany({
+                       orderBy: { createdAt: 'desc' },
+                       take: Math.min(n2, 10)
+                     });
+                     if (logs.length === 0) {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '📭 Belum ada engine logs.' } } as any);
+                     } else {
+                        const logLines = logs.map((l: any) => {
+                          const icon = l.result === 'EXECUTED' ? '✅' : l.result === 'IGNORED' ? '⏭️' : l.result === 'BLOCKED' ? '🚫' : '📋';
+                          const time = new Date(l.createdAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+                          return icon + ' [' + time + '] ' + (l.symbol ? l.symbol + ' — ' : '') + l.action + ': ' + (l.reason || l.result || '');
+                        }).join('\n');
+                        const lines = [
+                          '📋 SYSTEM LOGS (last ' + logs.length + ')',
+                          '━━━━━━━━━━━━━━',
+                          logLines
+                        ];
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+                     }
+
+                  } else if (cmd === '/block') {
+                     const nowWIB3 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+                     const startWIB3 = new Date(nowWIB3.getFullYear(), nowWIB3.getMonth(), nowWIB3.getDate());
+                     startWIB3.setHours(startWIB3.getHours() - 7);
+                     const blockedLogs = await prisma.engineLog.findMany({
+                       where: { action: 'BLOCKED', createdAt: { gte: startWIB3 } },
+                       orderBy: { createdAt: 'desc' }
+                     });
+                     const fastSLLogs = await prisma.engineLog.findMany({
+                       where: { action: 'FAST_SL_BLACKLIST', createdAt: { gte: startWIB3 } }
+                     });
+                     const blockedSymbols = [...new Set([
+                       ...blockedLogs.map((l: any) => l.symbol).filter(Boolean),
+                       ...fastSLLogs.map((l: any) => l.symbol).filter(Boolean)
+                     ])];
+                     if (blockedSymbols.length === 0) {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '✅ Tidak ada coin yang diblacklist hari ini.' } } as any);
+                     } else {
+                        const lines = [
+                          '🚫 BLACKLISTED COINS HARI INI',
+                          '━━━━━━━━━━━━━━',
+                          blockedSymbols.map((s: string) => '• ' + s).join('\n'),
+                          '━━━━━━━━━━━━━━',
+                          'Total: ' + blockedSymbols.length + ' coin | Reset: 00:00 WIB'
+                        ];
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+                     }
+
+                  } else if (cmd === '/risk') {
+                     const riskRule3 = await prisma.riskRule.findFirst({ where: { isActive: true } });
+                     const cbLock2 = await prisma.appSettings.findUnique({ where: { key: 'circuit_breaker_lock_until' } });
+                     const isLocked = cbLock2?.value && new Date(cbLock2.value) > new Date();
+                     const nowWIB4 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+                     const startWIB4 = new Date(nowWIB4.getFullYear(), nowWIB4.getMonth(), nowWIB4.getDate());
+                     startWIB4.setHours(startWIB4.getHours() - 7);
+                     const portfolio2 = await prisma.portfolio.findFirst();
+                     const capital = portfolio2?.totalCapital || 0;
+                     const closedToday2 = await prisma.trade.findMany({ where: { exitAt: { gte: startWIB4 }, status: 'CLOSED' } });
+                     const todayLoss = closedToday2.filter((t: any) => (t.pnl || 0) < 0).reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+                     const lossPct = capital > 0 ? Math.abs(todayLoss / capital * 100).toFixed(1) : '0';
+                     const maxLoss = riskRule3?.maxDailyLossPct || 10;
+                     const lines = [
+                       '🛡️ RISK STATUS',
+                       '━━━━━━━━━━━━━━',
+                       '🔒 Circuit Breaker: ' + (isLocked ? 'LOCKED' : '✅ OPEN'),
+                       isLocked ? '⏰ Unlock: ' + new Date(cbLock2!.value).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : '',
+                       '━━━━━━━━━━━━━━',
+                       '📉 Today Loss: -$' + Math.abs(todayLoss).toFixed(2) + ' (-' + lossPct + '%)',
+                       '⚠️ Daily Limit: ' + maxLoss + '% ($' + (capital * maxLoss / 100).toFixed(2) + ')',
+                       '📊 Weekly Limit: ' + (riskRule3?.maxWeeklyLossPct || 25) + '%',
+                       '💀 Max Drawdown: ' + (riskRule3?.maxDrawdownPct || 40) + '%',
+                       '━━━━━━━━━━━━━━',
+                       todayLoss < 0 ? '⚠️ Gunakan /close_all jika perlu emergency exit!' : '✅ Risk dalam batas normal'
+                     ].filter(Boolean);
+                     await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: lines.join('\n') } } as any);
+
                   } else if (cmd === '/help') {
                      const helpText = [
                        '🤖 TradeCore Bot — Commands',
                        '━━━━━━━━━━━━━━',
-                       '📊 INFO',
-                       '/status — Engine status',
-                       '/positions — Open positions',
+                       '📊 INFO & MONITORING',
+                       '/daily — P&L hari ini (trades & profit)',
+                       '/capital — Modal, mode, circuit breaker',
+                       '/target — Progress profit target',
+                       '/mode — Setting mode aktif',
+                       '/risk — Status risk & circuit breaker',
+                       '/positions — Posisi terbuka saat ini',
+                       '/status — Engine running/stopped',
                        '',
-                       '⚙️ ENGINE',
-                       '/start — Start engine',
-                       '/stop — Emergency stop',
+                       '🦅 HUNTER & AI',
+                       '/hunter — Pair aktif dari Dynamic Hunter',
+                       '/signals [N] — N sinyal AI terbaru (default 5)',
+                       '/logs [N] — N engine logs terbaru (default 5)',
+                       '/block — Coin yang diblacklist hari ini',
+                       '',
+                       '⚙️ ENGINE CONTROL',
+                       '/start — Nyalakan engine',
+                       '/stop — Matikan engine (emergency)',
                        '/pause_2h — Pause 2 jam, auto-restart',
                        '',
                        '💰 SETTINGS',
@@ -328,12 +566,11 @@ export async function startTelegramListener() {
                        '   Contoh: /set_hold 16',
                        '',
                        '🚨 EMERGENCY',
-                       '/close_all — Close ALL positions',
-                       '',
-                       '🖥️ Dashboard: lihat Risk Manager web'
+                       '/close_all — Close SEMUA posisi'
                      ].join('\n');
                      await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: helpText } } as any);
                   }
+
                }
             }
          }
