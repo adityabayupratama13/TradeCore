@@ -79,9 +79,28 @@ async function calculateMetrics(
   tempStartOfWeek.setUTCHours(0,0,0,0);
   const startOfWeek = new Date(tempStartOfWeek.getTime() - wibOffset);
 
+  // ── SIMULATED CAPITAL BASELINE ────────────────────────────────────────
+  // Jika simulated capital aktif, gunakan waktu aktivasi sebagai floor
+  // sehingga loss sebelum aktivasi tidak masuk perhitungan circuit breaker
+  const simulatedCapSetting = await prisma.appSettings.findUnique({ where: { key: 'simulated_capital_usd' } });
+  const simulatedActivatedAt = await prisma.appSettings.findUnique({ where: { key: 'simulated_capital_activated_at' } });
+  const isSimulated = simulatedCapSetting?.value && parseFloat(simulatedCapSetting.value) > 0;
+  const baselineTime = isSimulated && simulatedActivatedAt?.value
+    ? new Date(simulatedActivatedAt.value)
+    : null;
+
+  // Effective start times: gunakan yang paling baru antara normal window vs baseline aktivasi
+  const effectiveStartOfDay = baselineTime && baselineTime > startOfDay ? baselineTime : startOfDay;
+  const effectiveStartOfWeek = baselineTime && baselineTime > startOfWeek ? baselineTime : startOfWeek;
+  
+  if (baselineTime) {
+    console.log(`🎭 [Simulated Capital] Using baseline: ${baselineTime.toISOString()} — ignoring trades before this time`);
+  }
+  // ─────────────────────────────────────────────────────────────────────
+
   // Fetch closed trades for today and this week
   const recentTrades = await prisma.trade.findMany({
-    where: { status: 'CLOSED', exitAt: { gte: startOfWeek } }
+    where: { status: 'CLOSED', exitAt: { gte: effectiveStartOfWeek } }
   });
 
   let todayPnl = 0;
@@ -90,13 +109,14 @@ async function calculateMetrics(
   recentTrades.forEach((t: any) => {
     const pnl = t.pnl || 0;
     weekPnl += pnl;
-    if (t.exitAt && t.exitAt >= startOfDay) {
+    if (t.exitAt && t.exitAt >= effectiveStartOfDay) {
       todayPnl += pnl;
     }
   });
 
   const dailyLossPct = todayPnl < 0 ? (Math.abs(todayPnl) / startingCapital) * 100 : 0;
   const weeklyLossPct = weekPnl < 0 ? (Math.abs(weekPnl) / startingCapital) * 100 : 0;
+
 
   let canTrade = baseCanTrade;
   let isLocked = baseIsLocked;
@@ -215,7 +235,15 @@ async function calculateMetrics(
   }
 
   // Check Drawdown Limit
-  const allTrades = await prisma.trade.findMany({ where: { status: 'CLOSED' }, orderBy: { exitAt: 'asc' } });
+  // Jika simulated capital aktif, hanya hitung trade setelah baseline untuk drawdown
+  const allTrades = await prisma.trade.findMany({
+    where: {
+      status: 'CLOSED',
+      ...(baselineTime ? { exitAt: { gte: baselineTime } } : {})
+    },
+    orderBy: { exitAt: 'asc' }
+  });
+
   let currentEq = startingCapital;
   let peakEq = startingCapital;
   allTrades.forEach((t: any) => {
