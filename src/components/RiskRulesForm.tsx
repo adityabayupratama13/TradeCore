@@ -55,7 +55,7 @@ export function RiskRulesForm() {
   const isCustom = activeMode !== 'CUSTOM' && (
     formData.riskPctLargeCap !== presetConfig.settings.riskPctLargeCap ||
     formData.maxDailyLossPct !== presetConfig.settings.maxDailyLossPct
-    // Simple heuristic to show "≡ƒöº CUSTOM" if overridden
+    // Simple heuristic to show "🔧 CUSTOM" if overridden
   );
 
   const displayMode = isCustom ? 'CUSTOM' : activeMode;
@@ -89,14 +89,14 @@ export function RiskRulesForm() {
       const data = await res.json();
       if (res.ok && data.success) {
         setFormData({ ...formData, activeMode: m, ...data.settings });
-        showToastMsg(`Γ£à Mode berhasil diubah ke ${TRADING_MODES[m].badge}. Semua parameter diperbarui otomatis.`, 'success');
+        showToastMsg(`✅ Mode berhasil diubah ke ${TRADING_MODES[m].badge}. Semua parameter diperbarui otomatis.`, 'success');
         refreshStatus();
         if (m === 'DEGEN') setShowDegenModal(false);
       } else {
-        showToastMsg(`Γ¥î Failed to change mode: ${data.message || 'Error'}`, 'error');
+        showToastMsg(`❌ Failed to change mode: ${data.message || 'Error'}`, 'error');
       }
     } catch(e: any) {
-      showToastMsg(`Γ¥î Failed to connect: ${e.message}`, 'error');
+      showToastMsg(`❌ Failed to connect: ${e.message}`, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -111,10 +111,10 @@ export function RiskRulesForm() {
       });
       if (res.ok) {
         setEngineVer(ver);
-        showToastMsg(`Γ£à AI Engine diubah ke ${ver === 'v2' ? 'V2' : 'V1'}`, 'success');
+        showToastMsg(`✅ AI Engine diubah ke ${ver === 'v2' ? 'V2' : 'V1'}`, 'success');
       }
     } catch(e) {
-      showToastMsg(`Γ¥î Gagal mengubah AI Engine`, 'error');
+      showToastMsg(`❌ Gagal mengubah AI Engine`, 'error');
     } finally {
       setIsEngineSaving(false);
     }
@@ -163,13 +163,13 @@ export function RiskRulesForm() {
       
       const data = await res.json();
       if (res.ok) {
-        showToastMsg("Γ£à Override & Target berhasil disimpan", 'success');
+        showToastMsg("✅ Override & Target berhasil disimpan", 'success');
         refreshStatus();
       } else {
-        showToastMsg(`Γ¥î Failed to save: ${data.error || 'Unknown error'}`, 'error');
+        showToastMsg(`❌ Failed to save: ${data.error || 'Unknown error'}`, 'error');
       }
     } catch(e: any) {
-      showToastMsg(`Γ¥î Failed to save: ${e.message}`, 'error');
+      showToastMsg(`❌ Failed to save: ${e.message}`, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -200,7 +200,7 @@ export function RiskRulesForm() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
            <div className="bg-[#0A0E1A] border border-red-500/50 rounded-xl p-6 max-w-md w-full shadow-2xl shadow-red-900/20">
               <h3 className="text-xl font-bold text-red-500 mb-4 flex items-center gap-2">
-                <AlertTriangle /> ≡ƒÆÇ Aktivasi DEGEN Mode
+                <AlertTriangle /> 💀 Aktivasi DEGEN Mode
               </h3>
               <div className="text-gray-300 text-sm space-y-4 mb-6">
                  <p>Mode ini menggunakan leverage sangat tinggi (50-70x).</p>
@@ -232,15 +232,15 @@ export function RiskRulesForm() {
       {/* RECOMMENDATION BANNER */}
       {capital <= 50 && (
         <div className="bg-emerald-900/30 border border-emerald-500/50 rounded-xl p-5 flex items-start gap-4 shadow-lg shadow-emerald-900/10">
-           <div className="text-4xl">≡ƒÆí</div>
+           <div className="text-4xl">💡</div>
            <div className="flex-1">
               <h3 className="text-emerald-400 font-bold text-lg mb-1">REKOMENDASI UNTUK KAMU</h3>
-              <p className="text-emerald-100/80 text-sm mb-3">Berdasarkan capital ${(capital).toLocaleString()}, kami sarankan mulai dengan <span className="font-bold text-emerald-300">≡ƒ¢í∩╕Å SAFE MODE</span>.</p>
+              <p className="text-emerald-100/80 text-sm mb-3">Berdasarkan capital ${(capital).toLocaleString()}, kami sarankan mulai dengan <span className="font-bold text-emerald-300">🛡️ SAFE MODE</span>.</p>
               <ul className="text-xs text-emerald-100/60 space-y-1 mb-4">
-                 <li>ΓÇó Loss per trade maksimal ${(capital * 0.03).toFixed(2)} (3%)</li>
-                 <li>ΓÇó Leverage rendah = tidak mudah liquidasi</li>
-                 <li>ΓÇó Validasi sistem dulu selama 1 bulan</li>
-                 <li>ΓÇó Kalau konsisten profit ΓåÆ upgrade ke BALANCED</li>
+                 <li>• Loss per trade maksimal ${(capital * 0.03).toFixed(2)} (3%)</li>
+                 <li>• Leverage rendah = tidak mudah liquidasi</li>
+                 <li>• Validasi sistem dulu selama 1 bulan</li>
+                 <li>• Kalau konsisten profit → upgrade ke BALANCED</li>
               </ul>
               <button 
                 onClick={() => handleModeSelect('SAFE')}
@@ -286,7 +286,7 @@ export function RiskRulesForm() {
 
          {isCustom && (
             <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded text-yellow-400 text-sm text-center font-bold">
-               ≡ƒöº CUSTOM OVERRIDES ACTIVE
+               🔧 CUSTOM OVERRIDES ACTIVE
             </div>
          )}
       </div>
@@ -297,9 +297,9 @@ export function RiskRulesForm() {
         <div className="lg:col-span-2 bg-[#0E1628] border border-[#1a2540] rounded-xl p-6 shadow-xl">
            <h3 className="text-lg font-bold text-white mb-4 border-b border-[#1a2540] pb-2 flex items-center gap-2">
               <span style={{color: isCustom ? '#aaa' : getModeConfig(activeMode).color}}>
-                {isCustom ? '≡ƒöº CUSTOM MODE ' : getModeConfig(activeMode).badge}
+                {isCustom ? '🔧 CUSTOM MODE ' : getModeConfig(activeMode).badge}
               </span>
-              <span className="text-gray-500 text-sm uppercase font-normal">ΓÇö Active Settings</span>
+              <span className="text-gray-500 text-sm uppercase font-normal">— Active Settings</span>
            </h3>
 
            <div className="grid md:grid-cols-3 gap-6">
@@ -384,7 +384,7 @@ export function RiskRulesForm() {
 
             <div className="mt-4 pt-4 border-t border-green-900/30">
                <div className="bg-green-950/20 p-3 rounded border border-green-900/50 flex justify-between items-center">
-                 <span className="text-gray-400 text-sm font-bold flex items-center gap-1">≡ƒÄ» Daily Profit Target</span>
+                 <span className="text-gray-400 text-sm font-bold flex items-center gap-1">🎯 Daily Profit Target</span>
                  <span className="text-green-400 font-mono text-lg">${targetUsd}</span>
                </div>
             </div>
@@ -398,7 +398,7 @@ export function RiskRulesForm() {
            className="w-full p-4 flex justify-between items-center bg-[#111A2E] hover:bg-[#152038] transition"
          >
            <div className="flex items-center gap-2 text-gray-300 font-bold">
-              <TrendingDown className="w-4 h-4" /> ΓÜÖ∩╕Å Custom Override (Advanced)
+              <TrendingDown className="w-4 h-4" /> ⚙️ Custom Override (Advanced)
            </div>
            {showOverride ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
          </button>
@@ -421,7 +421,7 @@ export function RiskRulesForm() {
                       engineVer === 'v1' ? 'bg-[#3b82f6] text-white' : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    ΓÜí V1 (RSI Momentum)
+                    ⚡ V1 (RSI Momentum)
                   </button>
                   <button
                     onClick={() => changeEngine('v2')}
@@ -430,7 +430,7 @@ export function RiskRulesForm() {
                       engineVer === 'v2' ? 'bg-[#a855f7] text-white' : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    ≡ƒÜÇ V2 (Smart Money Concepts)
+                    🚀 V2 (Smart Money Concepts)
                   </button>
                 </div>
               </div>
@@ -440,9 +440,9 @@ export function RiskRulesForm() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h4 className="text-sm font-bold text-amber-400 flex items-center gap-2">
-                      ≡ƒÄ¡ Simulated Capital Mode
+                      🎭 Simulated Capital Mode
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${simulatedCapital > 0 ? 'bg-amber-500 text-black' : 'bg-[#1a2540] text-gray-500'}`}>
-                        {simulatedCapital > 0 ? `ACTIVE ΓÇô $${simulatedCapital}` : 'OFF'}
+                        {simulatedCapital > 0 ? `ACTIVE – $${simulatedCapital}` : 'OFF'}
                       </span>
                     </h4>
                     <p className="text-[11px] text-gray-500 mt-0.5">
@@ -462,7 +462,7 @@ export function RiskRulesForm() {
                 </div>
                 {simulatedCapital > 0 && (
                   <p className="text-[10px] text-amber-400/70 mt-2">
-                    ΓÜí Position size dihitung dari ${simulatedCapital} ΓÇö bukan dari real balance Binance
+                    ⚡ Position size dihitung dari ${simulatedCapital} — bukan dari real balance Binance
                   </p>
                 )}
               </div>
@@ -473,7 +473,7 @@ export function RiskRulesForm() {
                     <h4 className="text-gray-500 font-bold uppercase text-xs border-b border-[#1a2540] pb-2">Limits & Core</h4>
                     
                     <div className="flex flex-col gap-1 mb-3">
-                      <label className="text-xs text-emerald-400 font-bold flex items-center gap-1">≡ƒÄ» Daily Profit Target (USD)</label>
+                      <label className="text-xs text-emerald-400 font-bold flex items-center gap-1">🎯 Daily Profit Target (USD)</label>
                       <input type="number" value={isNaN(targetUsd) ? '' : targetUsd} onChange={(e) => setTargetUsd(parseFloat(e.target.value) || 0)} className="bg-[#0A0E1A] border border-emerald-900/50 focus:border-emerald-500 rounded p-2 text-white outline-none" />
                     </div>
 
@@ -490,16 +490,16 @@ export function RiskRulesForm() {
                       <input name="minProfitTargetPct" type="number" value={formData.minProfitTargetPct||''} onChange={handleChange} className="bg-[#0A0E1A] border border-[#303645] focus:border-blue-500 rounded p-2 text-white outline-none" />
                     </div>
                      <div className="flex flex-col gap-1">
-                       <label className="text-xs text-orange-400/70">ΓÅ▒∩╕Å Max Hold Profitable Trade (jam)</label>
+                       <label className="text-xs text-orange-400/70">⏱️ Max Hold Profitable Trade (jam)</label>
                        <input type="number" min={1} max={72} value={isNaN(maxHoldHours) ? '' : maxHoldHours} onChange={(e) => setMaxHoldHours(parseInt(e.target.value) || 16)} className="bg-[#0A0E1A] border border-orange-900/50 focus:border-orange-500 rounded p-2 text-white outline-none" />
                      </div>
                      <div className="flex flex-col gap-1">
-                        <label className="text-xs text-yellow-400/80">ΓÜí Max Entry Drift % (stale signal filter)</label>
+                        <label className="text-xs text-yellow-400/80">⚡ Max Entry Drift % (stale signal filter)</label>
                         <input type="number" min={0.1} max={5} step={0.1} value={isNaN(maxDriftPct) ? '' : maxDriftPct} onChange={(e) => setMaxDriftPct(parseFloat(e.target.value) || 0.8)} className="bg-[#0A0E1A] border border-yellow-900/50 focus:border-yellow-500 rounded p-2 text-white outline-none" />
                         <span className="text-[10px] text-gray-500">Skip entry jika harga bergerak &gt; X% dari harga AI (default: 0.8%)</span>
                       </div>
                      <div className="flex flex-col gap-1">
-                        <label className="text-xs text-purple-400/80">≡ƒöä Max Trades Per Symbol / Hari</label>
+                        <label className="text-xs text-purple-400/80">🔄 Max Trades Per Symbol / Hari</label>
                         <input type="number" min={1} max={10} step={1} value={isNaN(maxTradesPerSymbol) ? '' : maxTradesPerSymbol} onChange={(e) => setMaxTradesPerSymbol(parseInt(e.target.value) || 3)} className="bg-[#0A0E1A] border border-purple-900/50 focus:border-purple-500 rounded p-2 text-white outline-none" />
                         <span className="text-[10px] text-gray-500">Maks berapa kali satu symbol bisa di-trade per hari (default: 3)</span>
                       </div>
