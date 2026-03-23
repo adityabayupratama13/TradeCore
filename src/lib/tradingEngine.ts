@@ -488,7 +488,9 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
       const currentMark = currentMarkObj.markPrice;
       const aiEntryPrice = signal.entryPrice;
       const driftPct = ((currentMark - aiEntryPrice) / aiEntryPrice) * 100;
-      const MAX_DRIFT_PCT = 0.8; // maks 0.8% drift diperbolehkan
+      // Baca threshold dari DB (bisa diubah dari Risk Manager UI)
+      const driftSetting = await prisma.appSettings.findUnique({ where: { key: 'max_entry_drift_pct' } });
+      const MAX_DRIFT_PCT = parseFloat(driftSetting?.value || '0.8');
 
       // Untuk LONG: jika harga naik jauh (> MAX_DRIFT) = sudah telat masuk = overpriced
       // Untuk SHORT: jika harga turun jauh (< -MAX_DRIFT) = sudah telat masuk = kita akan short di harga lebih rendah

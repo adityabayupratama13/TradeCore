@@ -10,6 +10,7 @@ export function RiskRulesForm() {
   const [formData, setFormData] = useState<any>({});
   const [targetUsd, setTargetUsd] = useState<number>(350);
   const [maxHoldHours, setMaxHoldHours] = useState<number>(16);
+  const [maxDriftPct, setMaxDriftPct] = useState<number>(0.8);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
@@ -30,6 +31,9 @@ export function RiskRulesForm() {
     // Load max hold hours dari appSettings
     fetch('/api/settings?key=max_hold_hours').then(res => res.json()).then(data => {
       if (data.value) setMaxHoldHours(parseInt(data.value) || 16);
+    }).catch(() => {});
+    fetch('/api/settings?key=max_entry_drift_pct').then(res => res.json()).then(data => {
+      if (data.value) setMaxDriftPct(parseFloat(data.value) || 0.8);
     }).catch(() => {});
   }, [status?.rules, (status as any)?.dailyProfitTarget]);
 
@@ -129,6 +133,12 @@ export function RiskRulesForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: 'max_hold_hours', value: maxHoldHours })
+      });
+      // Save max entry drift %
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'max_entry_drift_pct', value: maxDriftPct })
       });
       
       const data = await res.json();
@@ -427,10 +437,15 @@ export function RiskRulesForm() {
                       <label className="text-xs text-gray-400">Min TP Target % Capital</label>
                       <input name="minProfitTargetPct" type="number" value={formData.minProfitTargetPct||''} onChange={handleChange} className="bg-[#0A0E1A] border border-[#303645] focus:border-blue-500 rounded p-2 text-white outline-none" />
                     </div>
-                    <div className="flex flex-col gap-1">
+                     <div className="flex flex-col gap-1">
                        <label className="text-xs text-orange-400/70">⏱️ Max Hold Profitable Trade (jam)</label>
                        <input type="number" min={1} max={72} value={maxHoldHours} onChange={(e) => setMaxHoldHours(parseInt(e.target.value))} className="bg-[#0A0E1A] border border-orange-900/50 focus:border-orange-500 rounded p-2 text-white outline-none" />
                      </div>
+                     <div className="flex flex-col gap-1">
+                        <label className="text-xs text-yellow-400/80">⚡ Max Entry Drift % (stale signal filter)</label>
+                        <input type="number" min={0.1} max={5} step={0.1} value={maxDriftPct} onChange={(e) => setMaxDriftPct(parseFloat(e.target.value))} className="bg-[#0A0E1A] border border-yellow-900/50 focus:border-yellow-500 rounded p-2 text-white outline-none" />
+                        <span className="text-[10px] text-gray-500">Skip entry jika harga bergerak &gt; X% dari harga AI (default: 0.8%)</span>
+                      </div>
                      <div className="flex flex-col gap-1">
                        <label className="text-xs text-red-500/70">Max Daily Loss %</label>
                        <input name="maxDailyLossPct" type="number" value={formData.maxDailyLossPct||''} onChange={handleChange} className="bg-[#0A0E1A] border border-red-900/50 focus:border-red-500 rounded p-2 text-white outline-none" />
