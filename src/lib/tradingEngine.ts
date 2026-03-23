@@ -283,7 +283,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const availableSlots = maxPositions - currentSymbols.size;
 
     if (availableSlots <= 0) {
-      console.log(`Max ${maxPositions} positions open. Monitoring only.`);
+      console.log(`🚫 All ${maxPositions} positions full. Skipping AI analysis to save tokens.`);
       return;
     }
 
@@ -291,15 +291,22 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const versionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
     const engineVersion = versionSetting?.value || 'v1';
 
-    console.log(`🔍 Analyzing ${availablePairs.length} pairs via AI (Engine: ${engineVersion.toUpperCase()}) (Mode: ${riskRule?.activeMode || 'SAFE'})...`);
+    // OPTIMIZATION: Batasi pair yang dikirim ke AI sesuai slot tersedia (× 3 sebagai buffer)
+    // Ini hemat token AI secara signifikan — tidak perlu analisa 20 pair kalau hanya butuh 1 entry
+    const aiScanLimit = Math.min(availableSlots * 3, availablePairs.length);
+    const pairsToAnalyze = availablePairs.slice(0, aiScanLimit);
+    // Hunter sudah sort by score, jadi slice pertama = pair terbaik
+
+    console.log(`🔍 Slots tersedia: ${availableSlots} — Mengirim ${pairsToAnalyze.length}/${availablePairs.length} pair ke AI (Engine: ${engineVersion.toUpperCase()}) (Mode: ${riskRule?.activeMode || 'SAFE'})...`);
+    console.log(`💡 Token saved: skipping ${availablePairs.length - pairsToAnalyze.length} pair dari AI scan`);
     
     // FIX: Batch AI thinking to prevent SQLite Database Connection Timouts (locking) & Rate limits
     const chunkSize = 4;
     const results: any[] = [];
     
-    for (let i = 0; i < availablePairs.length; i += chunkSize) {
-        const batch = availablePairs.slice(i, i + chunkSize);
-        console.log(`   Processing AI batch ${Math.floor(i/chunkSize) + 1}/${Math.ceil(availablePairs.length/chunkSize)}...`);
+    for (let i = 0; i < pairsToAnalyze.length; i += chunkSize) {
+        const batch = pairsToAnalyze.slice(i, i + chunkSize);
+        console.log(`   Processing AI batch ${Math.floor(i/chunkSize) + 1}/${Math.ceil(pairsToAnalyze.length/chunkSize)}...`);
         
         const aiPromises = batch.map(async (pair: any) => {
             try {
