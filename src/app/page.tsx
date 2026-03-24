@@ -134,9 +134,9 @@ export default function DashboardHome() {
                     </td>
                     <td className="px-5 py-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-sans font-bold tracking-wider border border-transparent ${
-                        trade.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
+                        trade.engineVersion === 'v3' ? 'bg-[#10b981]/15 text-[#10b981]' : trade.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
                       }`}>
-                        {trade.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
+                        {trade.engineVersion === 'v3' ? '🎯 V3' : trade.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
                       </span>
                     </td>
                     <td className="px-5 py-3">{trade.entryPrice}</td>
