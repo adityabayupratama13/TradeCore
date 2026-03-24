@@ -136,7 +136,6 @@ export async function manageV3Trade(trade: any): Promise<{ action: string; detai
           takeProfit: tpLevels.tp2,
           slAlgoId: newSL?.algoId?.toString() || null,
           tpAlgoId: newTP?.algoId?.toString() || null,
-          pnlUsd: (trade.pnlUsd || 0) + partialPnl
         }
       });
 
@@ -208,7 +207,6 @@ export async function manageV3Trade(trade: any): Promise<{ action: string; detai
           takeProfit: tpLevels.tp3,
           slAlgoId: newSL?.algoId?.toString() || null,
           tpAlgoId: null,
-          pnlUsd: (trade.pnlUsd || 0) + partialPnl
         }
       });
 

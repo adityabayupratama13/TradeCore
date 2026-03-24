@@ -21,7 +21,7 @@ export function RiskRulesForm() {
   const [showDegenModal, setShowDegenModal] = useState(false);
   const [degenInput, setDegenInput] = useState("");
   
-  const [engineVer, setEngineVer] = useState<'v1'|'v2'>('v1');
+  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'>('v1');
   const [isEngineSaving, setIsEngineSaving] = useState(false);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function RiskRulesForm() {
     }
   };
 
-  const changeEngine = async (ver: 'v1'|'v2') => {
+  const changeEngine = async (ver: 'v1'|'v2'|'v3') => {
     if (ver === engineVer) return;
     setIsEngineSaving(true);
     try {
