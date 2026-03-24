@@ -107,11 +107,18 @@ export function RiskRulesForm() {
     setIsEngineSaving(true);
     try {
       const res = await fetch('/api/engine/version', { 
-        method: 'POST', body: JSON.stringify({ version: ver }), headers: { 'Content-Type': 'application/json' }
+        method: 'POST', body: JSON.stringify({ version: ver, applyPreset: true }), headers: { 'Content-Type': 'application/json' }
       });
       if (res.ok) {
         setEngineVer(ver);
-        showToastMsg(`✅ AI Engine diubah ke ${ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2' : 'V1'}`, 'success');
+        const label = ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
+        showToastMsg(`✅ Engine → ${label} (preset applied)`, 'success');
+        // Reload risk rules so Custom Override panel shows new preset values
+        try {
+          const rulesRes = await fetch('/api/risk/status');
+          const rulesData = await rulesRes.json();
+          if (rulesData?.rules) setFormData(rulesData.rules);
+        } catch (_) {}
       }
     } catch(e) {
       showToastMsg(`❌ Gagal mengubah AI Engine`, 'error');
