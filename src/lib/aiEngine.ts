@@ -1,4 +1,7 @@
 import { getKlines, getMarkPrice, get24hrTicker, getOrderBook, Kline, roundPrice } from './binance';
+import { analyzeHTFStructure } from './structureAnalyzer';
+import { detectKeyLevels } from './levelDetector';
+import { checkEntryTrigger, EntrySetup } from './entryTrigger';
 import { prisma } from '../../lib/prisma';
 import { getCoinCategory } from './coinCategories';
 
@@ -735,3 +738,239 @@ JSON only, no markdown:
   }
 }
 
+
+// ==========================================
+// ENGINE V3: SNIPER MODE ANALYSIS
+// AI as VALIDATOR, not decision maker
+// ==========================================
+
+export async function analyzeMarketV3(symbol: string, triggerData: any = null, activeMode: string = 'SAFE'): Promise<TradeSignal> {
+  try {
+    // Fetch multi-timeframe data
+    const [klines5m, klines15m, klines1h, klines4h, markPriceObj] = await Promise.all([
+      getKlines(symbol, '5m', 30).catch(() => null),
+      getKlines(symbol, '15m', 50),
+      getKlines(symbol, '1h', 50),
+      getKlines(symbol, '4h', 30),
+      getMarkPrice(symbol)
+    ]);
+
+    const currentPrice = markPriceObj.markPrice;
+
+    // ═══════════════════════════════════════
+    // LAYER 1: HTF Structure Analysis (4h)
+    // ═══════════════════════════════════════
+    const structure = analyzeHTFStructure(klines4h, currentPrice);
+    
+    if (structure.bias === 'SKIP') {
+      console.log(`   [V3-L1] ${symbol}: SKIP — ${structure.reasoning}`);
+      return {
+        symbol, action: 'SKIP', confidence: 0, reasoning: `V3-L1: ${structure.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'HTF_NO_BIAS', analyzedAt: new Date()
+      };
+    }
+
+    console.log(`   [V3-L1] ${symbol}: ${structure.bias} (${structure.structure}, strength=${structure.strength})`);
+
+    // ═══════════════════════════════════════
+    // LAYER 2: Key Level Detection (1h + 15m)
+    // ═══════════════════════════════════════
+    const levels = detectKeyLevels(klines1h, klines15m, currentPrice);
+
+    if (levels.allLevels.length === 0) {
+      console.log(`   [V3-L2] ${symbol}: SKIP — No key levels detected`);
+      return {
+        symbol, action: 'SKIP', confidence: 0, reasoning: 'V3-L2: No key levels found',
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'NO_LEVELS', analyzedAt: new Date()
+      };
+    }
+
+    const obCount = levels.orderBlocks.length;
+    const fvgCount = levels.fvgZones.length;
+    const lpCount = levels.liquidityPools.length;
+    console.log(`   [V3-L2] ${symbol}: ${obCount} OBs, ${fvgCount} FVGs, ${lpCount} LPs. Nearest: ${levels.nearestLevelDistance.toFixed(2)}%`);
+
+    // ═══════════════════════════════════════
+    // LAYER 3: Entry Trigger Check (15m + 5m)
+    // ═══════════════════════════════════════
+    const entry = checkEntryTrigger(klines15m, klines5m, structure.bias, levels, currentPrice);
+
+    if (!entry.triggered) {
+      console.log(`   [V3-L3] ${symbol}: NO TRIGGER — ${entry.reasoning}`);
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence, reasoning: `V3-L3: ${entry.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'NO_TRIGGER', analyzedAt: new Date()
+      };
+    }
+
+    console.log(`   [V3-L3] ${symbol}: ✅ TRIGGERED! ${entry.triggerType} | Conf=${entry.confidence} | R/R=${entry.riskReward.toFixed(1)} | SL=${entry.slDistance.toFixed(2)}%`);
+
+    // ═══════════════════════════════════════
+    // LAYER 4: AI Validation (confirm/reject)
+    // ═══════════════════════════════════════
+    const aiValidation = await validateWithAI(symbol, entry, structure, levels, currentPrice, klines15m, klines1h, activeMode);
+
+    if (aiValidation.action === 'REJECT') {
+      console.log(`   [V3-L4] ${symbol}: AI REJECTED — ${aiValidation.reasoning}`);
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence * 0.5, reasoning: `V3-L4 AI rejected: ${aiValidation.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'AI_REJECT', analyzedAt: new Date()
+      };
+    }
+
+    // AI may adjust SL/TP
+    const finalSL = aiValidation.adjustedSL || entry.stopLoss;
+    const finalTP = aiValidation.adjustedTP || entry.takeProfit1;
+    const finalConfidence = Math.min(Math.round((entry.confidence + (aiValidation.confidence || entry.confidence)) / 2), 95);
+
+    console.log(`   [V3-L4] ${symbol}: ✅ AI CONFIRMED (conf=${finalConfidence})`);
+
+    // ═══════════════════════════════════════
+    // LAYER 5: Build Final Signal
+    // ═══════════════════════════════════════
+    const signal: TradeSignal = {
+      symbol,
+      action: entry.side,
+      confidence: finalConfidence,
+      reasoning: `V3 Sniper: ${entry.triggerType}. ${structure.reasoning}`,
+      entryPrice: currentPrice,
+      stopLoss: finalSL,
+      takeProfit: finalTP,
+      leverage: 1, // Will be overridden by position sizing
+      riskReward: entry.riskReward,
+      entryUrgency: 'MARKET',
+      pullbackPct: null,
+      keySignal: entry.triggerType.split(' + ')[0] || 'V3_SNIPER',
+      estimatedDuration: '1-4h',
+      analyzedAt: new Date(),
+      // V3 extra data (will be passed through)
+      v3Data: {
+        tp1: entry.takeProfit1,
+        tp2: entry.takeProfit2,
+        tp3: entry.takeProfit3,
+        slDistance: entry.slDistance,
+        structure: structure.structure,
+        strength: structure.strength,
+        triggerType: entry.triggerType
+      }
+    } as any;
+
+    return await roundSignalPrices(signal, symbol);
+
+  } catch (error) {
+    console.error(`V3 Analysis Failed for ${symbol}`, error);
+    return {
+      symbol, action: 'SKIP', confidence: 0, reasoning: `V3 error: ${error}`,
+      entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+      entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'V3_ERROR', analyzedAt: new Date()
+    };
+  }
+}
+
+// ─────────────────────────────────────────
+// V3 AI VALIDATION (structured, narrow prompt)
+// ─────────────────────────────────────────
+
+async function validateWithAI(
+  symbol: string,
+  entry: EntrySetup,
+  structure: any,
+  levels: any,
+  currentPrice: number,
+  klines15m: Kline[],
+  klines1h: Kline[],
+  activeMode: string
+): Promise<{ action: 'CONFIRM' | 'REJECT'; reasoning: string; confidence?: number; adjustedSL?: number; adjustedTP?: number }> {
+  
+  const d15m = {
+    close: klines15m.map(k => k.close),
+    high: klines15m.map(k => k.high),
+    low: klines15m.map(k => k.low)
+  };
+  const rsi15m = calculateRSI(d15m.close, 14).toFixed(1);
+  const macd15m = calculateMACD(d15m.close);
+
+  const d1h = { close: klines1h.map(k => k.close) };
+  const rsi1h = calculateRSI(d1h.close, 14).toFixed(1);
+  const ema20_1h = calculateEMA(d1h.close, 20).pop()?.toFixed(6);
+  const ema50_1h = calculateEMA(d1h.close, 50).pop()?.toFixed(6);
+
+  const supportStr = levels.nearestSupport ? `${levels.nearestSupport.midpoint.toFixed(6)} (${levels.nearestSupport.source})` : 'None';
+  const resistStr = levels.nearestResistance ? `${levels.nearestResistance.midpoint.toFixed(6)} (${levels.nearestResistance.source})` : 'None';
+
+  const prompt = `[ENGINE V3 SNIPER VALIDATION]
+You are validating a PRE-FILTERED trade setup. The algorithmic filters have already confirmed:
+
+SETUP:
+- Symbol: ${symbol}
+- Side: ${entry.side}
+- Entry: ${currentPrice}
+- Stop Loss: ${entry.stopLoss.toFixed(6)} (${entry.slDistance.toFixed(2)}% from entry)
+- Take Profit 1: ${entry.takeProfit1.toFixed(6)} (R/R 1:2)
+- R/R: ${entry.riskReward.toFixed(1)}
+- Trigger: ${entry.triggerType}
+- Algorithmic Confidence: ${entry.confidence}%
+
+STRUCTURE:
+- 4H Bias: ${structure.structure} (${structure.strength}, score=${structure.strengthScore})
+- Nearest Support: ${supportStr}
+- Nearest Resistance: ${resistStr}
+
+INDICATORS:
+- 15m RSI: ${rsi15m} | MACD hist: ${macd15m.histogram.toFixed(6)}
+- 1h RSI: ${rsi1h} | EMA20: ${ema20_1h} | EMA50: ${ema50_1h}
+
+YOUR TASK: Validate or reject this setup. Check for:
+1. RSI overbought/oversold conflict (RSI>75 for LONG = bad, RSI<25 for SHORT = bad)
+2. MACD divergence against the trade direction
+3. SL placement logic (is it behind a real structure?)
+4. Any obvious trap or fakeout risk
+
+JSON only:
+{"action":"CONFIRM"|"REJECT","reasoning":"max 15 words","confidence":0-100,"adjusted_sl":number|null,"adjusted_tp":number|null}`;
+
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+  const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+  const AI_MODEL = process.env.AI_MODEL || 'google/gemini-2.5-flash-lite-preview-06-17';
+
+  try {
+    const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.05,
+        max_tokens: 200
+      })
+    });
+
+    if (!res.ok) throw new Error(`AI API Error: ${res.statusText}`);
+
+    const aiData = await res.json();
+    let content = aiData.choices[0].message.content.trim();
+    if (content.startsWith('```json')) {
+      content = content.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    }
+    const result = JSON.parse(content);
+
+    return {
+      action: result.action === 'CONFIRM' ? 'CONFIRM' : 'REJECT',
+      reasoning: result.reasoning || 'No reason',
+      confidence: result.confidence,
+      adjustedSL: result.adjusted_sl || undefined,
+      adjustedTP: result.adjusted_tp || undefined
+    };
+  } catch (err) {
+    // If AI fails, trust algorithmic analysis
+    console.warn(`[V3] AI validation failed, trusting algo filters:`, err);
+    return { action: 'CONFIRM', reasoning: 'AI unavailable, algo-confirmed', confidence: entry.confidence };
+  }
+}

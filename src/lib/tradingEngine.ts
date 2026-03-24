@@ -1,6 +1,7 @@
 import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity, getOpenAlgoOrders } from './binance';
 import { FALLBACK_PAIRS, MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
-import { analyzeMarket, calculateATR } from './aiEngine';
+import { analyzeMarket, analyzeMarketV3, calculateATR } from './aiEngine';
+import { manageV3Trade, saveV3TPLevels, V3TPLevels } from './partialTPManager';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
@@ -16,6 +17,18 @@ export async function manageOpenPositions() {
   
   const openTrades = await prisma.trade.findMany({ where: { status: 'OPEN' } });
   if (openTrades.length === 0) return;
+
+  // V3 Partial TP Management — check each open trade for TP hits
+  for (const trade of openTrades) {
+    try {
+      const v3Result = await manageV3Trade(trade);
+      if (v3Result) {
+        console.log(`[V3 TP] ${trade.symbol}: ${v3Result.action} — ${v3Result.detail}`);
+      }
+    } catch (e) {
+      // V3 TP management is non-critical, don't break the loop
+    }
+  }
 
   const currentHourWIB = new Date().getHours();
 
@@ -365,6 +378,13 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
         
         const aiPromises = batch.map(async (pair: any) => {
             try {
+                if (engineVersion === 'v3') {
+                    return await analyzeMarketV3(
+                        pair.symbol,
+                        pair.symbol === symbol ? triggerData : null,
+                        riskRule?.activeMode || 'SAFE'
+                    );
+                }
                 return await analyzeMarket(
                     pair.symbol, 
                     pair.symbol === symbol ? triggerData : null, 
@@ -679,6 +699,30 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
           engineVersion: engineVersion
         }
       });
+
+      // V3: Save multi-level TP data for partial TP management
+      if (engineVersion === 'v3' && (signal as any).v3Data) {
+        const v3 = (signal as any).v3Data;
+        const createdTrade = await prisma.trade.findFirst({
+          where: { symbol, status: 'OPEN' },
+          orderBy: { entryAt: 'desc' }
+        });
+        if (createdTrade) {
+          const tpLevels: V3TPLevels = {
+            tp1: v3.tp1,
+            tp2: v3.tp2,
+            tp3: v3.tp3,
+            tp1Hit: false,
+            tp2Hit: false,
+            tp3Hit: false,
+            originalSL: signal.stopLoss,
+            currentSL: signal.stopLoss,
+            trailingActivated: false
+          };
+          await saveV3TPLevels(createdTrade.id, tpLevels);
+          console.log(`📊 V3 TP Levels saved: TP1=${v3.tp1.toFixed(4)} TP2=${v3.tp2.toFixed(4)} TP3=${v3.tp3.toFixed(4)}`);
+        }
+      }
 
       await logEngine({ symbol, action: signal.action, signal, result: 'EXECUTED' });
 

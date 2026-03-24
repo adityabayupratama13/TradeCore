@@ -111,7 +111,7 @@ export function RiskRulesForm() {
       });
       if (res.ok) {
         setEngineVer(ver);
-        showToastMsg(`✅ AI Engine diubah ke ${ver === 'v2' ? 'V2' : 'V1'}`, 'success');
+        showToastMsg(`✅ AI Engine diubah ke ${ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2' : 'V1'}`, 'success');
       }
     } catch(e) {
       showToastMsg(`❌ Gagal mengubah AI Engine`, 'error');
@@ -431,6 +431,15 @@ export function RiskRulesForm() {
                     }`}
                   >
                     🚀 V2 (Smart Money Concepts)
+                  </button>
+                  <button
+                    onClick={() => changeEngine('v3')}
+                    disabled={isEngineSaving}
+                    className={`px-4 py-2 text-xs font-bold transition-all ${
+                      engineVer === 'v3' ? 'bg-[#10b981] text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🎯 V3 (Sniper)
                   </button>
                 </div>
               </div>

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   try {
     const { version } = await req.json();
     
-    if (version !== 'v1' && version !== 'v2') {
+    if (version !== 'v1' && version !== 'v2' && version !== 'v3') {
       return NextResponse.json({ success: false, error: 'Invalid version' }, { status: 400 });
     }
 
