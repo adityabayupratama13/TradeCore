@@ -240,7 +240,6 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
   }
 }
 
-var lastUpdateId = 0;
 var telegramListenerTimer: NodeJS.Timeout | null = null;
 
 export async function startTelegramListener() {
@@ -252,12 +251,22 @@ export async function startTelegramListener() {
          const chatId = await prisma.appSettings.findUnique({ where: { key: 'telegram_chat_id' } });
          if (!botToken?.value || !chatId?.value) return;
 
+         // FIX: Persist lastUpdateId to DB to survive hot-reload & prevent duplicate message processing
+         const updateIdSetting = await prisma.appSettings.findUnique({ where: { key: 'tg_last_update_id' } });
+         const lastUpdateId = parseInt(updateIdSetting?.value || '0');
+
          const url = 'https://api.telegram.org/bot' + botToken.value + '/getUpdates?offset=' + lastUpdateId + '&timeout=0';
          const res = await fetch(url);
          const json = await res.json();
          if (json.ok && json.result.length > 0) {
             for (const update of json.result) {
-               lastUpdateId = update.update_id + 1;
+               const newUpdateId = update.update_id + 1;
+               // Save to DB immediately so even if crash during processing, won't re-process
+               await prisma.appSettings.upsert({
+                 where: { key: 'tg_last_update_id' },
+                 update: { value: newUpdateId.toString() },
+                 create: { key: 'tg_last_update_id', value: newUpdateId.toString() }
+               });
                const msg = update.message;
                if (msg && msg.text && msg.chat.id.toString() === chatId.value) {
                   const cmd = msg.text.trim();

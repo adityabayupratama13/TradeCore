@@ -270,7 +270,25 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
 
     if (currentSymbols.has(symbol)) return;
 
-    const portfolio = await prisma.portfolio.findFirst();
+    // FIX: DB-level per-symbol execution lock to prevent race condition double entries
+    // Two concurrent AI calls can both pass the Binance position check before either completes
+    const execLockKey = `exec_lock_${symbol}`;
+    const execLock = await prisma.appSettings.findUnique({ where: { key: execLockKey } });
+    if (execLock?.value) {
+      const lockAge = Date.now() - parseInt(execLock.value);
+      if (lockAge < 90_000) { // Lock valid for 90 seconds
+        console.log(`🔒 [EXEC LOCK] ${symbol} already being processed (${(lockAge/1000).toFixed(0)}s ago). Skipping duplicate.`);
+        return;
+      }
+    }
+    // Acquire lock immediately before async AI analysis
+    await prisma.appSettings.upsert({
+      where: { key: execLockKey },
+      update: { value: Date.now().toString() },
+      create: { key: execLockKey, value: Date.now().toString() }
+    });
+
+        const portfolio = await prisma.portfolio.findFirst();
     if (!portfolio) throw new Error("No portfolio configured");
 
     const balances = await getBalance();
