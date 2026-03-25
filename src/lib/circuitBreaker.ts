@@ -215,11 +215,63 @@ async function calculateMetrics(
     console.log('🎯 DAILY TARGET REACHED. LOCKED until', lockedUntil);
   }
 
-  // Check Weekly Limits
+  // ════════════════════════════════════════════════════════════════════
+  // WEEKLY LOSS HARD LOCK — CRITICAL FIX
+  // Previously this was WARNING-only, causing unlimited weekly losses!
+  // Now it LOCKS trading like daily loss does.
+  // ════════════════════════════════════════════════════════════════════
   if (weeklyLossPct >= rules.maxWeeklyLossPct) {
     warnings.push(`Weekly loss limit approaching or reached (${weeklyLossPct.toFixed(1)}%). Review mandatory.`);
     
-    // Log warning once per day roughly (simplification: we'll log it if not already logged recently)
+    if (!isLocked) {
+      canTrade = false;
+      isLocked = true;
+
+      // Lock until Monday 00:00 WIB (start of next week)
+      const nextMonday = new Date(nowWIB);
+      const currentDay = nextMonday.getUTCDay() || 7; // 1=Mon..7=Sun
+      const daysUntilMonday = currentDay === 1 ? 7 : (8 - currentDay); // always next Monday
+      nextMonday.setUTCDate(nextMonday.getUTCDate() + daysUntilMonday);
+      nextMonday.setUTCHours(0, 0, 0, 0);
+      lockedUntil = new Date(nextMonday.getTime() - wibOffset).toISOString();
+      reason = `Weekly loss limit of ${rules.maxWeeklyLossPct}% reached (actual: ${weeklyLossPct.toFixed(1)}%). LOCKED until Monday.`;
+
+      await prisma.appSettings.upsert({
+        where: { key: 'circuit_breaker_lock_until' },
+        update: { value: lockedUntil },
+        create: { key: 'circuit_breaker_lock_until', value: lockedUntil }
+      });
+
+      await prisma.riskEvent.create({
+        data: {
+          eventType: 'WEEKLY_LOCK',
+          description: reason,
+          capitalAtEvent: startingCapital
+        }
+      });
+
+      // Cancel all open orders on active pairs
+      const activeSetting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+      if (activeSetting?.value) {
+        const activePairs = JSON.parse(activeSetting.value);
+        for (const pair of activePairs) {
+          try { await cancelAllOrders(pair.symbol); } catch (err) { }
+        }
+      }
+
+      await sendTelegramAlert({
+        type: 'LOCK',
+        data: {
+          capital: startingCapital,
+          limit: rules.maxWeeklyLossPct,
+          lossPct: weeklyLossPct.toFixed(2),
+          unlockTime: new Date(lockedUntil).toLocaleString()
+        }
+      });
+      console.log('🔒 WEEKLY CIRCUIT BREAKER LOCKED until', lockedUntil);
+    }
+    
+    // Also log warning for tracking
     const recentWeeklyWarning = await prisma.riskEvent.findFirst({
       where: { eventType: 'WEEKLY_WARNING', createdAt: { gte: startOfDay } }
     });
@@ -253,8 +305,72 @@ async function calculateMetrics(
   
   const drawdownPct = peakEq > 0 ? ((peakEq - currentEq) / peakEq) * 100 : 0;
 
+  // ════════════════════════════════════════════════════════════════════
+  // MAX DRAWDOWN HARD LOCK — CRITICAL FIX
+  // Previously this was WARNING-only! Now it LOCKS and force-closes
+  // all open positions to prevent further capital destruction.
+  // ════════════════════════════════════════════════════════════════════
   if (drawdownPct >= rules.maxDrawdownPct) {
     warnings.push(`Critical: Maximum Drawdown reached (${drawdownPct.toFixed(1)}%). System evaluation required.`);
+
+    if (!isLocked) {
+      canTrade = false;
+      isLocked = true;
+
+      // Lock for 48 hours — requires manual review before resuming
+      const lockDuration = 48 * 60 * 60 * 1000; // 48 hours
+      lockedUntil = new Date(Date.now() + lockDuration).toISOString();
+      reason = `MAX DRAWDOWN of ${rules.maxDrawdownPct}% reached (actual: ${drawdownPct.toFixed(1)}%). EMERGENCY LOCK — 48h mandatory review.`;
+
+      await prisma.appSettings.upsert({
+        where: { key: 'circuit_breaker_lock_until' },
+        update: { value: lockedUntil },
+        create: { key: 'circuit_breaker_lock_until', value: lockedUntil }
+      });
+
+      // FORCE CLOSE all open positions immediately
+      try {
+        const openPositions = await getPositions();
+        for (const pos of openPositions) {
+          try {
+            await cancelAllOrders(pos.symbol);
+            // Close the position with market order — positionAmt is already a number
+            const qty = Math.abs(pos.positionAmt);
+            if (qty > 0) {
+              // closePosition from binance.ts is already imported at the top
+              // We need to use a different name to avoid conflict with the param name
+              const { closePosition: closeBinancePos } = await import('./binance');
+              await closeBinancePos(pos.symbol, pos.positionAmt);
+              console.log(`🚨 [EMERGENCY] Force closed ${pos.symbol}: ${qty} units`);
+            }
+          } catch (closeErr: any) {
+            console.error(`[EMERGENCY CLOSE] Failed for ${pos.symbol}:`, closeErr.message);
+          }
+        }
+      } catch (posErr: any) {
+        console.error('[EMERGENCY] Could not fetch positions:', posErr.message);
+      }
+
+      await prisma.riskEvent.create({
+        data: {
+          eventType: 'DRAWDOWN_EMERGENCY_LOCK',
+          description: reason,
+          capitalAtEvent: currentEq
+        }
+      });
+
+      await sendTelegramAlert({
+        type: 'LOCK',
+        data: {
+          capital: currentEq,
+          limit: rules.maxDrawdownPct,
+          lossPct: drawdownPct.toFixed(2),
+          unlockTime: new Date(lockedUntil).toLocaleString()
+        }
+      });
+      console.log('🚨🔒 MAX DRAWDOWN EMERGENCY LOCK — ALL POSITIONS FORCE CLOSED. Locked for 48h.');
+    }
+
     const recentDDWarning = await prisma.riskEvent.findFirst({
       where: { eventType: 'DRAWDOWN_WARNING', createdAt: { gte: startOfDay } }
     });

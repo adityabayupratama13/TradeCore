@@ -214,8 +214,28 @@ export async function manageOpenPositions() {
              await checkAndEnforceCircuitBreaker();
              await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: `Max hold ${maxHold}h reached`, pnl: profitRaw * trade.quantity, pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
              continue;
+         } else if (profitPct <= -15) {
+             // CRITICAL FIX: Force close positions with deep loss at max hold
+             // Previously these would hold forever "letting SL work naturally"
+             console.log(`🚨 [FORCE CLOSE] ${trade.symbol} at ${profitPct.toFixed(1)}% ROE after ${holdHours.toFixed(1)}h — cutting loss`);
+             await closePosition(trade.symbol, trade.quantity);
+             const pnlUsd = profitRaw * trade.quantity;
+             await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnl: pnlUsd, pnlPct: profitPct } });
+             await checkAndEnforceCircuitBreaker();
+             await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: `Max hold ${maxHold}h + deep loss force close`, pnl: pnlUsd, pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
+             continue;
          } else {
-             await logEngine({ symbol: trade.symbol, action: 'MAX_HOLD', result: 'IGNORED', reason: `In loss (${profitPct.toFixed(1)}%), letting SL work naturally` });
+             await logEngine({ symbol: trade.symbol, action: 'MAX_HOLD', result: 'WAITING', reason: `In minor loss (${profitPct.toFixed(1)}%), SL still within range — waiting up to ${maxHold + 4}h` });
+             // Extended grace: if still holding 4h after max hold, force close regardless
+             if (holdHours >= maxHold + 4) {
+               console.log(`🚨 [EXTENDED FORCE CLOSE] ${trade.symbol} at ${profitPct.toFixed(1)}% after ${holdHours.toFixed(1)}h — absolute max reached`);
+               await closePosition(trade.symbol, trade.quantity);
+               const pnlUsd = profitRaw * trade.quantity;
+               await prisma.trade.update({ where: { id: trade.id }, data: { status: 'CLOSED', exitPrice: currentPrice, exitAt: new Date(), pnl: pnlUsd, pnlPct: profitPct } });
+               await checkAndEnforceCircuitBreaker();
+               await sendTelegramAlert({ type: 'SESSION_CLOSE', data: { symbol: trade.symbol, direction: trade.direction, reason: `Extended max hold force close`, pnl: pnlUsd, pnlPct: profitPct.toFixed(2), holdDuration: `${holdHours.toFixed(1)}h` }});
+               continue;
+             }
          }
       }
 
