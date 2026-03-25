@@ -180,22 +180,33 @@ export async function manageOpenPositions() {
       if (trade.tpAlgoId && trade.takeProfit) {
         try {
           const algoOrders = await getOpenAlgoOrders(trade.symbol);
-          const tpStillActive = algoOrders?.orders?.some((o: any) =>
+          // Handle both response formats: { orders: [...] } or direct array
+          const ordersList = Array.isArray(algoOrders) ? algoOrders : (algoOrders?.orders || []);
+          const tpStillActive = ordersList.some((o: any) =>
             String(o.algoId) === String(trade.tpAlgoId) || o.type === 'TAKE_PROFIT_MARKET'
           );
           if (!tpStillActive) {
             console.log(`⚠️ [TP RESTORE] ${trade.symbol} TP algo gone! Re-placing TP at ${trade.takeProfit}`);
             const oppSide = isLong ? 'SELL' : 'BUY';
             const roundedTP = await roundPrice(trade.symbol, trade.takeProfit);
-            const newTp = await placeAlgoOrder({
-              algoType: 'CONDITIONAL', symbol: trade.symbol, side: oppSide,
-              type: 'TAKE_PROFIT_MARKET', triggerPrice: roundedTP.toString(),
-              closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'FALSE', timeInForce: 'GTC'
-            });
-            if (newTp?.algoId) {
-              await prisma.trade.update({ where: { id: trade.id }, data: { tpAlgoId: newTp.algoId.toString() } });
-              await logEngine({ symbol: trade.symbol, action: 'TP_RESTORE', result: 'EXECUTED', reason: `TP algo was missing, re-placed at ${roundedTP}` });
-              console.log(`✅ [TP RESTORE] ${trade.symbol} TP restored at ${roundedTP} (algoId: ${newTp.algoId})`);
+            try {
+              const newTp = await placeAlgoOrder({
+                algoType: 'CONDITIONAL', symbol: trade.symbol, side: oppSide,
+                type: 'TAKE_PROFIT_MARKET', triggerPrice: roundedTP.toString(),
+                closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'FALSE', timeInForce: 'GTC'
+              });
+              if (newTp?.algoId) {
+                await prisma.trade.update({ where: { id: trade.id }, data: { tpAlgoId: newTp.algoId.toString() } });
+                await logEngine({ symbol: trade.symbol, action: 'TP_RESTORE', result: 'EXECUTED', reason: `TP algo was missing, re-placed at ${roundedTP}` });
+                console.log(`✅ [TP RESTORE] ${trade.symbol} TP restored at ${roundedTP} (algoId: ${newTp.algoId})`);
+              }
+            } catch (placeErr: any) {
+              // If Binance says TP already exists, the TP is actually still active — just our tracking was wrong
+              if (placeErr.message?.includes('existing') || placeErr.message?.includes('already')) {
+                console.log(`ℹ️ [TP RESTORE] ${trade.symbol} TP already exists on Binance — no action needed`);
+              } else {
+                throw placeErr; // Re-throw other errors
+              }
             }
           }
         } catch (tpErr: any) {
