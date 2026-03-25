@@ -75,6 +75,23 @@ export async function syncPositions(): Promise<void> {
           }
         });
       } else {
+        // Prevent race condition: If trading engine is currently entering this trade, do not adopt it yet
+        const execLock = await prisma.appSettings.findUnique({ where: { key: `exec_lock_${pos.symbol}` } });
+        if (execLock?.value) {
+            const lockAge = Date.now() - parseInt(execLock.value);
+            if (lockAge < 90_000) {
+                console.log(`[PosSync] Skipping adoption of ${pos.symbol} — engine is currently executing it (${(lockAge/1000).toFixed(0)}s ago)`);
+                continue; // Skip this iteration
+            }
+        }
+
+        // Double check it wasn't inserted during the await above
+        const doubleCheck = await prisma.trade.findFirst({ where: { symbol: pos.symbol, status: 'OPEN' } });
+        if (doubleCheck) {
+            console.log(`[PosSync] ${pos.symbol} was just inserted by engine, skipping adoption`);
+            continue;
+        }
+
         console.log(`[PosSync] Adopting orphaned/manual position ${pos.symbol} into DB`);
         try {
             let portfolio = await prisma.portfolio.findFirst();
