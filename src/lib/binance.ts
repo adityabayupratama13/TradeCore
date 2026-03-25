@@ -465,3 +465,37 @@ export async function getTotalCapitalUSD(): Promise<number> {
     return portfolio.totalCapital;
   }
 }
+
+// ──────────────────────────────────────────────────────────────────
+// GET USER TRADES — Fetch actual fill data (realized PNL + fees)
+// Used by positionSync to get accurate exit price and PNL
+// ──────────────────────────────────────────────────────────────────
+export interface UserTrade {
+  symbol: string;
+  id: number;
+  orderId: number;
+  side: 'BUY' | 'SELL';
+  price: number;
+  qty: number;
+  realizedPnl: number;
+  commission: number;
+  commissionAsset: string;
+  time: number;
+}
+
+export async function getUserTrades(symbol: string, limit: number = 10): Promise<UserTrade[]> {
+  const res = await fetchBinance('/fapi/v1/userTrades', 'GET', { symbol, limit });
+  return res.map((t: any) => ({
+    symbol: t.symbol,
+    id: t.id,
+    orderId: t.orderId,
+    side: t.side,
+    price: parseFloat(t.price),
+    qty: parseFloat(t.qty),
+    realizedPnl: parseFloat(t.realizedPnl),
+    commission: parseFloat(t.commission),
+    commissionAsset: t.commissionAsset,
+    time: t.time
+  }));
+}
+

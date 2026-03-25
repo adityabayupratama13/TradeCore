@@ -1,4 +1,4 @@
-import { getPositions, getOpenAlgoOrders, placeAlgoOrder } from './binance';
+import { getPositions, getOpenAlgoOrders, placeAlgoOrder, getUserTrades } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { getCoinCategory } from './coinCategories';
@@ -104,17 +104,57 @@ export async function syncPositions(): Promise<void> {
 
     for (const trade of dbTrades) {
       if (!binanceSymbols.has(trade.symbol)) {
-        // Trade closed!
+        // Trade closed on Binance! Fetch actual fill data.
         
-        // Finalize PNL logic: Since it closed, get realistic DB snapshot of exit price
-        // (In a true production app, we would fetch /fapi/v1/userTrades to find exact exit price)
-        // For simulation completeness based on SL/TP bounds:
-        let exitPrice = trade.entryPrice; 
+        let exitPrice = trade.entryPrice;
+        let realizedPnl = trade.pnl || 0;
+        let totalCommission = 0;
         
-        // Mock proxy for exit price: PNL dictates where it closed roughly
-        const isWin = trade.pnlPct && trade.pnlPct > 0;
-        if (isWin && trade.takeProfit) exitPrice = trade.takeProfit;
-        else if (trade.stopLoss) exitPrice = trade.stopLoss;
+        // Fetch ACTUAL exit price and PNL from Binance userTrades
+        try {
+          const recentTrades = await getUserTrades(trade.symbol, 20);
+          // Find close trades (reduce-only) that happened after entry
+          const entryTime = trade.entryAt ? new Date(trade.entryAt).getTime() : 0;
+          const closeTrades = recentTrades.filter(t => t.time > entryTime);
+          
+          if (closeTrades.length > 0) {
+            // Calculate volume-weighted average exit price
+            let totalQty = 0;
+            let totalValue = 0;
+            realizedPnl = 0;
+            totalCommission = 0;
+            
+            for (const ct of closeTrades) {
+              totalQty += ct.qty;
+              totalValue += ct.price * ct.qty;
+              realizedPnl += ct.realizedPnl;
+              totalCommission += ct.commission;
+            }
+            
+            if (totalQty > 0) {
+              exitPrice = totalValue / totalQty; // VWAP exit price
+            }
+            
+            // Subtract commission from PNL for net profit
+            realizedPnl = realizedPnl - totalCommission;
+            
+            console.log(`📊 [PosSync] ${trade.symbol} actual close data:`);
+            console.log(`   Exit price: ${exitPrice.toFixed(6)} (VWAP from ${closeTrades.length} fills)`);
+            console.log(`   Realized PNL: $${realizedPnl.toFixed(4)} (after $${totalCommission.toFixed(4)} fees)`);
+          } else {
+            // Fallback: use last known PNL snapshot
+            console.log(`[PosSync] ${trade.symbol}: no recent userTrades found, using last PNL snapshot`);
+          }
+        } catch (utErr: any) {
+          console.error(`[PosSync] Failed to fetch userTrades for ${trade.symbol}:`, utErr.message);
+          // Fallback: use SL/TP estimate like before
+          const isWin = trade.pnlPct && trade.pnlPct > 0;
+          if (isWin && trade.takeProfit) exitPrice = trade.takeProfit;
+          else if (trade.stopLoss) exitPrice = trade.stopLoss;
+        }
+        
+        const isLong = trade.direction === 'LONG' || trade.direction === 'BUY';
+        const pnlPct = ((exitPrice - trade.entryPrice) / trade.entryPrice) * 100 * (isLong ? 1 : -1) * trade.leverage;
 
         await prisma.trade.update({
           where: { id: trade.id },
@@ -122,6 +162,8 @@ export async function syncPositions(): Promise<void> {
             status: 'CLOSED',
             exitAt: new Date(),
             exitPrice,
+            pnl: realizedPnl,
+            pnlPct,
           }
         });
 
@@ -129,7 +171,10 @@ export async function syncPositions(): Promise<void> {
         // FAST SL BLACKLIST & MILESTONE CLEANUP
         // ----------------------------------------------------------------------
         await prisma.appSettings.deleteMany({ where: { key: `milestone_${trade.id}` } }).catch(()=>{});
+        // Also clean up V3 TP levels
+        await prisma.appSettings.deleteMany({ where: { key: `v3_tp_${trade.id}` } }).catch(()=>{});
 
+        const isWin = realizedPnl > 0;
         if (!isWin && trade.entryAt) {
           const holdMinutes = (Date.now() - new Date(trade.entryAt).getTime()) / 60000;
           if (holdMinutes <= 5) {
@@ -169,9 +214,9 @@ export async function syncPositions(): Promise<void> {
                 type: 'TRADE_CLOSE',
                 data: {
                     symbol: trade.symbol, direction: trade.direction,
-                    exitPrice: exitPrice, pnl: trade.pnl || 0,
-                    pnlPct: (trade.pnlPct || 0).toFixed(2),
-                    reason: 'Closed on Binance'
+                    exitPrice: exitPrice, pnl: realizedPnl,
+                    pnlPct: pnlPct.toFixed(2),
+                    reason: `Closed on Binance${totalCommission > 0 ? ` (fee: $${totalCommission.toFixed(4)})` : ''}`
                 }
             });
             await checkAndEnforceCircuitBreaker();
