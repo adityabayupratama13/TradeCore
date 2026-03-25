@@ -5,15 +5,18 @@ import { prisma } from '../../lib/prisma';
 import { startTelegramListener, sendTelegramAlert } from './telegram';
 import { runDynamicHunter } from './pairSelector';
 
-let priceWatcherTimer: NodeJS.Timeout | null = null;
-let positionManagerTimer: NodeJS.Timeout | null = null;
-let healthTimer: NodeJS.Timeout | null = null;
-let hunterTimer: NodeJS.Timeout | null = null;
-let isRunning = false;
+const globalAny = global as any;
+
+globalAny.priceWatcherTimer = globalAny.priceWatcherTimer || null;
+globalAny.positionManagerTimer = globalAny.positionManagerTimer || null;
+globalAny.healthTimer = globalAny.healthTimer || null;
+globalAny.hunterTimer = globalAny.hunterTimer || null;
+globalAny.isRunning = globalAny.isRunning || false;
+
 
 export function startEngine(): void {
-  if (isRunning) return;
-  isRunning = true;
+  if (globalAny.isRunning) return;
+  globalAny.isRunning = true;
   
   startPriceWatcherLoop();
   startPositionManagerLoop();
@@ -32,7 +35,7 @@ function startPriceWatcherLoop(): void {
     } catch(err) {
       console.error('PriceWatcher error:', err);
     } finally {
-      if (isRunning) priceWatcherTimer = setTimeout(run, 60_000);
+      if (globalAny.isRunning) globalAny.priceWatcherTimer = setTimeout(run, 60_000);
     }
   }
   run();
@@ -50,17 +53,17 @@ function startPositionManagerLoop(): void {
     } catch(err) {
       console.error('PositionManager error:', err);
     } finally {
-      if (isRunning) positionManagerTimer = setTimeout(run, 300_000);
+      if (globalAny.isRunning) globalAny.positionManagerTimer = setTimeout(run, 300_000);
     }
   }
   run();
 }
 
 export function stopEngine(): void {
-  if (priceWatcherTimer) clearTimeout(priceWatcherTimer);
-  if (positionManagerTimer) clearTimeout(positionManagerTimer);
-  if (hunterTimer) clearTimeout(hunterTimer);
-  isRunning = false;
+  if (globalAny.priceWatcherTimer) clearTimeout(globalAny.priceWatcherTimer);
+  if (globalAny.positionManagerTimer) clearTimeout(globalAny.positionManagerTimer);
+  if (globalAny.hunterTimer) clearTimeout(globalAny.hunterTimer);
+  globalAny.isRunning = false;
   
   prisma.appSettings.upsert({
     where: { key: 'engine_status' },
@@ -85,7 +88,7 @@ function startDynamicHunterLoop(): void {
     } catch(err) {
       console.error('DynamicHunter error:', err)
     } finally {
-      if (isRunning) hunterTimer = setTimeout(run, 60 * 60 * 1000) // 1 hour
+      if (globalAny.isRunning) globalAny.hunterTimer = setTimeout(run, 60 * 60 * 1000) // 1 hour
     }
   }
   run() // run immediately on engine start
@@ -93,7 +96,7 @@ function startDynamicHunterLoop(): void {
 
 export function getEngineStatus() {
   return {
-    isRunning,
+    isRunning: globalAny.isRunning,
     lastRun: null,
     nextRun: null,
     cycleCount: 0
@@ -135,9 +138,10 @@ async function selfHealthCheck(): Promise<void> {
             update: { value: Date.now().toString() },
             create: { key: 'health_check_ping', value: Date.now().toString() }
          });
-      } catch (e) {
+      } catch (e: any) {
+         console.error('Health Check Database Error! Usually SQLITE_BUSY', e.message);
          stopEngine();
-         await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "🚨 DATABASE ERROR — Engine stopped" } } as any);
+         await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: `🚨 DATABASE ERROR — Engine stopped (${e.message})` } } as any);
          return;
       }
 
@@ -162,11 +166,14 @@ async function selfHealthCheck(): Promise<void> {
 function startSelfHealthCheckLoop(): void {
   const run = async () => {
     await selfHealthCheck();
-    healthTimer = setTimeout(run, 600_000);
+    globalAny.healthTimer = setTimeout(run, 600_000);
   };
   run();
 }
 
 // Initialize persistent background services regardless of engine state
-startTelegramListener();
-startSelfHealthCheckLoop();
+if (!globalAny.backgroundServicesStarted) {
+  startTelegramListener();
+  startSelfHealthCheckLoop();
+  globalAny.backgroundServicesStarted = true;
+}
