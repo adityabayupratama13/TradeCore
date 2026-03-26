@@ -409,8 +409,8 @@ export function checkEntryTrigger(
 
   // V4: wider SL range to avoid noise SL and allow normal pair volatility
   // V3: max 1.2%, min 0.15% (too tight for 20-25x leverage)
-  // V4: max 2.0%, min 0.5% (works well with 8-10x leverage)
-  const maxSlPct = isV4Mode ? 2.0 : 1.2;
+  // V4: max 6.0%, min 0.5% (widened to securely accommodate 5-10% volatility of daily top meme coins per user request)
+  const maxSlPct = isV4Mode ? 6.0 : 1.2;
   const minSlPct = isV4Mode ? 0.5 : 0.15;
 
   // Validate SL isn't too wide
