@@ -164,7 +164,8 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
 
         {/* Engine Version */}
         <div className="flex flex-col text-right cursor-pointer" onClick={async () => {
-          const newV = statusData.engineVersion === 'v1' ? 'v2' : statusData.engineVersion === 'v2' ? 'v3' : 'v1';
+          const cycle: Record<string, string> = { v1: 'v2', v2: 'v3', v3: 'v4', v4: 'v1' };
+          const newV = cycle[statusData.engineVersion] || 'v1';
           setStatusData({...statusData, engineVersion: newV});
           await fetch('/api/engine/version', { 
             method: 'POST', 

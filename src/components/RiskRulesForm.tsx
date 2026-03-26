@@ -21,7 +21,7 @@ export function RiskRulesForm() {
   const [showDegenModal, setShowDegenModal] = useState(false);
   const [degenInput, setDegenInput] = useState("");
   
-  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'>('v1');
+  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'>('v1');
   const [isEngineSaving, setIsEngineSaving] = useState(false);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function RiskRulesForm() {
     }
   };
 
-  const changeEngine = async (ver: 'v1'|'v2'|'v3') => {
+  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4') => {
     if (ver === engineVer) return;
     setIsEngineSaving(true);
     try {
@@ -111,7 +111,7 @@ export function RiskRulesForm() {
       });
       if (res.ok) {
         setEngineVer(ver);
-        const label = ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
+        const label = ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
         showToastMsg(`✅ Engine → ${label} (preset applied)`, 'success');
         // Reload risk rules so Custom Override panel shows new preset values
         try {
@@ -447,6 +447,15 @@ export function RiskRulesForm() {
                     }`}
                   >
                     🎯 V3 (Sniper)
+                  </button>
+                  <button
+                    onClick={() => changeEngine('v4')}
+                    disabled={isEngineSaving}
+                    className={`px-4 py-2 text-xs font-bold transition-all ${
+                      engineVer === 'v4' ? 'bg-gradient-to-r from-[#f59e0b] to-[#10b981] text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ⚡ V4 (Smart Aggressive)
                   </button>
                 </div>
               </div>
