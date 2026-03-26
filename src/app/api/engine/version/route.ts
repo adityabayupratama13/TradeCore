@@ -88,6 +88,27 @@ const ENGINE_PRESETS: Record<string, {
     maxOpenPositions: 3,
     maxDailyLossPct: 10,
   },
+
+  // ─────────────────────────────────────────
+  // V4: Smart Aggressive — Balance-aware leverage
+  // Leverage is actually overridden at runtime by getV4Leverage() in btcRegime.ts
+  // These preset values serve as UI display fallback only
+  // ─────────────────────────────────────────
+  v4: {
+    riskPctLargeCap: 2.0,
+    riskPctMidCap: 2.5,
+    riskPctLowCap: 2.5,
+    leverageLargeCap: 6,    // display only — runtime uses getV4Leverage()
+    leverageMidCap: 8,      // display only
+    leverageLowCap: 8,      // display only
+    maxLeverageLarge: 6,
+    maxLeverageMid: 8,
+    maxLeverageLow: 8,
+    minConfidence: 65,      // higher quality gate than V3 (55)
+    minProfitTargetPct: 5,  // realistic TP target (was 15% in V3)
+    maxOpenPositions: 3,
+    maxDailyLossPct: 10,
+  },
 };
 
 export async function GET() {
@@ -103,8 +124,8 @@ export async function POST(req: Request) {
   try {
     const { version, applyPreset = true } = await req.json();
     
-    if (version !== 'v1' && version !== 'v2' && version !== 'v3') {
-      return NextResponse.json({ success: false, error: 'Invalid version' }, { status: 400 });
+    if (!['v1', 'v2', 'v3', 'v4'].includes(version)) {
+      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1, v2, v3, or v4' }, { status: 400 });
     }
 
     // Save engine version
