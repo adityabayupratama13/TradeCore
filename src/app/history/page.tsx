@@ -89,9 +89,9 @@ export default function HistoryPage() {
                       </td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded text-xs font-bold border border-transparent ${
-                          t.engineVersion === 'v3' ? 'bg-[#10b981]/15 text-[#10b981]' : t.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
+                          t.engineVersion === 'v4' ? 'bg-[#f59e0b]/15 text-[#f59e0b]' : t.engineVersion === 'v3' ? 'bg-[#10b981]/15 text-[#10b981]' : t.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
                         }`}>
-                          {t.engineVersion === 'v3' ? '🎯 V3' : t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
+                          {t.engineVersion === 'v4' ? '⚡ V4' : t.engineVersion === 'v3' ? '🎯 V3' : t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
                         </span>
                       </td>
                       <td className="p-4">
