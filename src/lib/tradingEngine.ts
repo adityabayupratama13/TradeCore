@@ -420,8 +420,8 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       console.log(`[V4] BTC Regime: ${btcRegime.regime} | Allow LONG: ${btcRegime.allowLong} | Allow SHORT: ${btcRegime.allowShort}`);
     }
 
-    // OPTIMIZATION: Batasi pair yang dikirim ke AI sesuai slot tersedia (× 3 sebagai buffer)
-    const aiScanLimit = Math.min(availableSlots * 3, availablePairs.length);
+    // OPTIMIZATION: Di V4 kita kirim SEMUA koin (up to 30) untuk dijaring
+    const aiScanLimit = engineVersion === 'v4' ? availablePairs.length : Math.min(availableSlots * 3, availablePairs.length);
     let pairsToAnalyze = availablePairs.slice(0, aiScanLimit);
 
     // V4: Filter out non-liquid pairs (meme coins etc.) before sending to AI

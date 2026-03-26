@@ -379,10 +379,11 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   
   // V4 now uses the same dynamic selection as V3 (user request)
   // Dynamic selection finds high volatility / extreme funding pairs for scalping
-  const top20 = scoredPairs
-    .filter(p => p.fundingCategory !== 'NORMAL')
-    .slice(0, 20);
-  finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
+  const topCoinsCount = engineVersion === 'v4' ? 30 : 20;
+  const topCoins = scoredPairs
+    .filter(p => engineVersion === 'v4' ? true : p.fundingCategory !== 'NORMAL')
+    .slice(0, topCoinsCount);
+  finalActive = topCoins.map(p => ({ ...p, tier: 'ACTIVE' as const }));
   
   console.log('🎯 Final active pairs:', finalActive.map(p => p.symbol));
 
