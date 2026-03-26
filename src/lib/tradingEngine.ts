@@ -1,12 +1,13 @@
 import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity, getOpenAlgoOrders } from './binance';
 import { FALLBACK_PAIRS, MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
-import { analyzeMarket, analyzeMarketV3, calculateATR } from './aiEngine';
+import { analyzeMarket, analyzeMarketV3, analyzeMarketV4, calculateATR } from './aiEngine';
 import { manageV3Trade, saveV3TPLevels, V3TPLevels } from './partialTPManager';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
 import { getCoinCategory } from './coinCategories';
+import { checkBtcRegime, isLiquidPair, getV4Leverage } from './btcRegime';
 
 let cycleNumber = 0;
 
@@ -408,10 +409,27 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const versionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
     const engineVersion = versionSetting?.value || 'v1';
 
+    // V4: Check BTC regime ONCE before analyzing all pairs
+    // This avoids redundant API calls and ensures consistent regime across all pair analyses this cycle
+    let btcRegime: Awaited<ReturnType<typeof checkBtcRegime>> | null = null;
+    if (engineVersion === 'v4') {
+      btcRegime = await checkBtcRegime();
+      console.log(`[V4] BTC Regime: ${btcRegime.regime} | Allow LONG: ${btcRegime.allowLong} | Allow SHORT: ${btcRegime.allowShort}`);
+    }
+
     // OPTIMIZATION: Batasi pair yang dikirim ke AI sesuai slot tersedia (× 3 sebagai buffer)
-    // Ini hemat token AI secara signifikan — tidak perlu analisa 20 pair kalau hanya butuh 1 entry
     const aiScanLimit = Math.min(availableSlots * 3, availablePairs.length);
-    const pairsToAnalyze = availablePairs.slice(0, aiScanLimit);
+    let pairsToAnalyze = availablePairs.slice(0, aiScanLimit);
+
+    // V4: Filter out non-liquid pairs (meme coins etc.) before sending to AI
+    if (engineVersion === 'v4') {
+      const originalCount = pairsToAnalyze.length;
+      pairsToAnalyze = pairsToAnalyze.filter((p: any) => isLiquidPair(p.symbol));
+      const removedCount = originalCount - pairsToAnalyze.length;
+      if (removedCount > 0) {
+        console.log(`[V4] Filtered out ${removedCount} non-liquid pairs. Remaining: ${pairsToAnalyze.map((p: any) => p.symbol).join(', ')}`);
+      }
+    }
     // Hunter sudah sort by score, jadi slice pertama = pair terbaik
 
     console.log(`🔍 Slots tersedia: ${availableSlots} — Mengirim ${pairsToAnalyze.length}/${availablePairs.length} pair ke AI (Engine: ${engineVersion.toUpperCase()}) (Mode: ${riskRule?.activeMode || 'SAFE'})...`);
@@ -427,6 +445,25 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
         
         const aiPromises = batch.map(async (pair: any) => {
             try {
+                if (engineVersion === 'v4') {
+                    // V4: BTC regime gate — skip if signal direction blocked by BTC regime
+                    const signal = await analyzeMarketV4(
+                        pair.symbol,
+                        pair.symbol === symbol ? triggerData : null,
+                        riskRule?.activeMode || 'SAFE',
+                        btcRegime?.regime || 'UNKNOWN'
+                    );
+                    // Post-filter: if BTC gate blocks this direction, override to SKIP
+                    if (signal.action === 'LONG' && btcRegime && !btcRegime.allowLong) {
+                        console.log(`[V4-GATE] ${pair.symbol}: LONG blocked by BTC regime (${btcRegime.regime})`);
+                        return { ...signal, action: 'SKIP' as const, reasoning: `V4 BTC gate: LONG blocked (BTC ${btcRegime.regime})` };
+                    }
+                    if (signal.action === 'SHORT' && btcRegime && !btcRegime.allowShort) {
+                        console.log(`[V4-GATE] ${pair.symbol}: SHORT blocked by BTC regime (${btcRegime.regime})`);
+                        return { ...signal, action: 'SKIP' as const, reasoning: `V4 BTC gate: SHORT blocked (BTC ${btcRegime.regime})` };
+                    }
+                    return signal;
+                }
                 if (engineVersion === 'v3') {
                     return await analyzeMarketV3(
                         pair.symbol,
@@ -944,11 +981,21 @@ export async function calculatePositionSize(
     ? (riskRule?.riskPctMidCap ?? category.riskPct)
     : (riskRule?.riskPctLowCap ?? category.riskPct);
 
-  // IGNORE signal.leverage completely
-  // Always use getCategoryLeverage(symbol, riskRule)
-  const leverage = getCategoryLeverage(symbol, riskRule);
-  console.log(`📊 Leverage: ${leverage}x (from mode settings)`);
-  // signal.leverage is never used
+  // Determine engine version for leverage strategy
+  const versionSettingForLev = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+  const engineVersionForLev = versionSettingForLev?.value || 'v1';
+
+  let leverage: number;
+  if (engineVersionForLev === 'v4') {
+    // V4: Balance-aware leverage — ignores riskRule leverage settings entirely
+    // This prevents the 20-25x madness that was causing -8 to -12% ROE per loss
+    leverage = getV4Leverage(symbol, realAvailable);
+    console.log(`[V4-LEV] ${symbol}: ${leverage}x (balance-aware, balance: $${realAvailable.toFixed(2)})`);
+  } else {
+    // V1/V2/V3: Use riskRule leverage (configurable from UI)
+    leverage = getCategoryLeverage(symbol, riskRule);
+    console.log(`📊 Leverage: ${leverage}x (from mode settings)`);
+  }
 
   const riskAmount = totalCapital * (riskPct / 100);
 

@@ -276,7 +276,8 @@ export function checkEntryTrigger(
   klines5m: Kline[] | null,
   bias: MarketBias,
   levels: LevelDetectorResult,
-  currentPrice: number
+  currentPrice: number,
+  isV4Mode: boolean = false  // V4: wider SL thresholds
 ): EntrySetup {
   const noEntry: EntrySetup = {
     triggered: false,
@@ -406,17 +407,23 @@ export function checkEntryTrigger(
   const sl = calculateSniperSL(currentPrice, bestLevel, side, klines15m);
   const slDistPct = Math.abs(currentPrice - sl) / currentPrice * 100;
 
-  // Validate SL isn't too wide (max 1.2% for sniper entries)
-  if (slDistPct > 1.2) {
+  // V4: wider SL range to avoid noise SL and allow normal pair volatility
+  // V3: max 1.2%, min 0.15% (too tight for 20-25x leverage)
+  // V4: max 2.0%, min 0.5% (works well with 8-10x leverage)
+  const maxSlPct = isV4Mode ? 2.0 : 1.2;
+  const minSlPct = isV4Mode ? 0.5 : 0.15;
+
+  // Validate SL isn't too wide
+  if (slDistPct > maxSlPct) {
     noEntry.confidence = confidence;
-    noEntry.reasoning = `SL too wide: ${slDistPct.toFixed(2)}% > 1.2% max. Level too far.`;
+    noEntry.reasoning = `SL too wide: ${slDistPct.toFixed(2)}% > ${maxSlPct}% max. Level too far.`;
     return noEntry;
   }
 
-  // Validate SL isn't too tight (min 0.15%)
-  if (slDistPct < 0.15) {
+  // Validate SL isn't too tight
+  if (slDistPct < minSlPct) {
     noEntry.confidence = confidence;
-    noEntry.reasoning = `SL too tight: ${slDistPct.toFixed(2)}% < 0.15% min. Risk of wick-out.`;
+    noEntry.reasoning = `SL too tight: ${slDistPct.toFixed(2)}% < ${minSlPct}% min. Risk of wick-out.`;
     return noEntry;
   }
 

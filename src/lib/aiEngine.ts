@@ -740,11 +740,161 @@ JSON only, no markdown:
 
 
 // ==========================================
+// ENGINE V4: SMART AGGRESSIVE ANALYSIS
+// V3 Sniper + BTC Regime alignment + Wider SL + Min conf 65
+// ==========================================
+
+export async function analyzeMarketV4(
+  symbol: string,
+  triggerData: any = null,
+  activeMode: string = 'SAFE',
+  btcRegimeBias: 'BULLISH' | 'BEARISH' | 'RANGING' | 'UNKNOWN' = 'UNKNOWN'
+): Promise<TradeSignal> {
+  try {
+    const [klines5m, klines15m, klines1h, klines4h, markPriceObj] = await Promise.all([
+      getKlines(symbol, '5m', 30).catch(() => null),
+      getKlines(symbol, '15m', 50),
+      getKlines(symbol, '1h', 50),
+      getKlines(symbol, '4h', 30),
+      getMarkPrice(symbol)
+    ]);
+
+    const currentPrice = markPriceObj.markPrice;
+
+    // Layer 1: HTF Structure
+    const structure = analyzeHTFStructure(klines4h, currentPrice);
+
+    // V4: BTC Regime alignment check
+    // If BTC is clearly bullish → skip BEARISH biased pairs
+    // If BTC is clearly bearish → skip BULLISH biased pairs
+    if (btcRegimeBias === 'BULLISH' && structure.bias === 'SHORT_ONLY' && symbol !== 'BTCUSDT') {
+      console.log(`   [V4-L0] ${symbol}: SKIP — pair structure SHORT_ONLY conflicts with BTC BULLISH regime`);
+      return {
+        symbol, action: 'SKIP', confidence: 0,
+        reasoning: 'V4: Pair bearish vs BTC bullish regime — skipping SHORT against macro',
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'BTC_REGIME_CONFLICT', analyzedAt: new Date()
+      };
+    }
+    if (btcRegimeBias === 'BEARISH' && structure.bias === 'LONG_ONLY' && symbol !== 'BTCUSDT') {
+      console.log(`   [V4-L0] ${symbol}: SKIP — pair structure LONG_ONLY conflicts with BTC BEARISH regime`);
+      return {
+        symbol, action: 'SKIP', confidence: 0,
+        reasoning: 'V4: Pair bullish vs BTC bearish regime — skipping LONG against macro',
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'BTC_REGIME_CONFLICT', analyzedAt: new Date()
+      };
+    }
+
+    if (structure.bias === 'SKIP') {
+      console.log(`   [V4-L1] ${symbol}: SKIP — ${structure.reasoning}`);
+      return {
+        symbol, action: 'SKIP', confidence: 0, reasoning: `V4-L1: ${structure.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'HTF_NO_BIAS', analyzedAt: new Date()
+      };
+    }
+
+    console.log(`   [V4-L1] ${symbol}: ${structure.bias} (${structure.structure}, strength=${structure.strength})`);
+
+    // Layer 2: Key Level Detection
+    const levels = detectKeyLevels(klines1h, klines15m, currentPrice);
+
+    if (levels.allLevels.length === 0) {
+      return {
+        symbol, action: 'SKIP', confidence: 0, reasoning: 'V4-L2: No key levels found',
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'NO_LEVELS', analyzedAt: new Date()
+      };
+    }
+
+    // Layer 3: Entry Trigger — V4 mode (wider SL)
+    const entry = checkEntryTrigger(klines15m, klines5m, structure.bias, levels, currentPrice, true);
+
+    if (!entry.triggered) {
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence, reasoning: `V4-L3: ${entry.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'NO_TRIGGER', analyzedAt: new Date()
+      };
+    }
+
+    // V4: Minimum confidence gate — stricter than V3 (65 vs 55)
+    if (entry.confidence < 65) {
+      console.log(`   [V4-L3] ${symbol}: Low confidence ${entry.confidence} < 65. SKIP.`);
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence,
+        reasoning: `V4: Low confidence ${entry.confidence} < 65 (V4 requires higher quality)`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'LOW_CONF', analyzedAt: new Date()
+      };
+    }
+
+    console.log(`   [V4-L3] ${symbol}: ✅ TRIGGERED! ${entry.triggerType} | Conf=${entry.confidence} | R/R=${entry.riskReward.toFixed(1)} | SL=${entry.slDistance.toFixed(2)}%`);
+
+    // Layer 4: AI Validation
+    const aiValidation = await validateWithAI(symbol, entry, structure, levels, currentPrice, klines15m, klines1h, activeMode);
+
+    if (aiValidation.action === 'REJECT') {
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence * 0.5,
+        reasoning: `V4-L4 AI rejected: ${aiValidation.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'AI_REJECT', analyzedAt: new Date()
+      };
+    }
+
+    const finalSL = aiValidation.adjustedSL || entry.stopLoss;
+    const finalTP = aiValidation.adjustedTP || entry.takeProfit1;
+    const finalConfidence = Math.min(Math.round((entry.confidence + (aiValidation.confidence || entry.confidence)) / 2), 95);
+
+    console.log(`   [V4-L4] ${symbol}: ✅ AI CONFIRMED (conf=${finalConfidence}, regime=${btcRegimeBias})`);
+
+    const signal: TradeSignal = {
+      symbol,
+      action: entry.side,
+      confidence: finalConfidence,
+      reasoning: `V4 Smart: ${entry.triggerType}. BTC=${btcRegimeBias}. ${structure.reasoning}`,
+      entryPrice: currentPrice,
+      stopLoss: finalSL,
+      takeProfit: finalTP,
+      leverage: 1,
+      riskReward: entry.riskReward,
+      entryUrgency: 'MARKET',
+      pullbackPct: null,
+      keySignal: entry.triggerType.split(' + ')[0] || 'V4_SMART',
+      estimatedDuration: '1-4h',
+      analyzedAt: new Date(),
+      v3Data: {
+        tp1: entry.takeProfit1,
+        tp2: entry.takeProfit2,
+        tp3: entry.takeProfit3,
+        slDistance: entry.slDistance,
+        structure: structure.structure,
+        strength: structure.strength,
+        triggerType: entry.triggerType
+      }
+    } as any;
+
+    return await roundSignalPrices(signal, symbol);
+
+  } catch (error) {
+    console.error(`V4 Analysis Failed for ${symbol}`, error);
+    return {
+      symbol, action: 'SKIP', confidence: 0, reasoning: `V4 error: ${error}`,
+      entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+      entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'V4_ERROR', analyzedAt: new Date()
+    };
+  }
+}
+
+// ==========================================
 // ENGINE V3: SNIPER MODE ANALYSIS
 // AI as VALIDATOR, not decision maker
 // ==========================================
 
 export async function analyzeMarketV3(symbol: string, triggerData: any = null, activeMode: string = 'SAFE'): Promise<TradeSignal> {
+
   try {
     // Fetch multi-timeframe data
     const [klines5m, klines15m, klines1h, klines4h, markPriceObj] = await Promise.all([
