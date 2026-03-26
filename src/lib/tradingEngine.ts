@@ -393,11 +393,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       }
     });
 
-    // Daily limits and win rate brake removed by user request
-
-    let dynamicMinConf = Math.max(riskRule?.minConfidence ?? 70, 70);
-
-    const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
+    let dynamicMinConf = riskRule?.minConfidence ?? 55;
     let activePairs = [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
     if (setting?.value) { try { activePairs = JSON.parse(setting.value); } catch(e){} }
     
@@ -508,8 +504,9 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
       }).catch(err => console.error("Error saving signal history", err));
     }
 
-    // Gunakan minConfidence dari riskRule (configurable dari UI Risk Manager)
-    const minConf = Math.max(dynamicMinConf, riskRule?.minConfidence ?? 70);
+    // Gunakan minConfidence dari riskRule (configurable dari UI Risk Manager, default 55)
+    // Jangan ganjal lagi pakai Math.max(..., 70) karena V4 memang mentargetkan 55+
+    const minConf = dynamicMinConf;
 
     const validSignals = signals
       .filter(s => {
