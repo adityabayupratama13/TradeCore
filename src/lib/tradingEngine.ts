@@ -394,6 +394,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     });
 
     let dynamicMinConf = riskRule?.minConfidence ?? 55;
+    const setting = await prisma.appSettings.findUnique({ where: { key: 'active_trading_pairs' } });
     let activePairs = [{symbol: 'BTCUSDT'}, {symbol: 'ETHUSDT'}, {symbol: 'SOLUSDT'}];
     if (setting?.value) { try { activePairs = JSON.parse(setting.value); } catch(e){} }
     
