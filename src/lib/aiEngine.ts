@@ -819,12 +819,12 @@ export async function analyzeMarketV4(
       };
     }
 
-    // V4: Minimum confidence gate — stricter than V3 (65 vs 55)
-    if (entry.confidence < 65) {
-      console.log(`   [V4-L3] ${symbol}: Low confidence ${entry.confidence} < 65. SKIP.`);
+    // V4: Minimum confidence gate — User requested V3-like scalping, so lowered to 55
+    if (entry.confidence < 55) {
+      console.log(`   [V4-L3] ${symbol}: Low confidence ${entry.confidence} < 55. SKIP.`);
       return {
         symbol, action: 'SKIP', confidence: entry.confidence,
-        reasoning: `V4: Low confidence ${entry.confidence} < 65 (V4 requires higher quality)`,
+        reasoning: `V4: Low confidence ${entry.confidence} < 55`,
         entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
         entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'LOW_CONF', analyzedAt: new Date()
       };
