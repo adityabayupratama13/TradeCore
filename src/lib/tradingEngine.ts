@@ -848,16 +848,23 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
 
 
 async function logEngine({ symbol, action, signal, result, reason }: any) {
-  await prisma.engineLog.create({
-    data: {
-      cycleNumber,
-      symbol,
-      action,
-      signal: signal ? JSON.stringify(signal) : undefined,
-      result,
-      reason
-    }
-  });
+  if (result === 'ERROR' || result === 'BLOCKED') {
+    console.error(`❌ [ENGINE ${result}] ${symbol} ${action}: ${reason}`);
+  }
+  try {
+    await prisma.engineLog.create({
+      data: {
+        cycleNumber,
+        symbol,
+        action,
+        signal: signal ? JSON.stringify(signal) : undefined,
+        result,
+        reason
+      }
+    });
+  } catch (logErr: any) {
+    console.error(`❌ Failed to write engine log to DB: ${logErr.message}`, logErr);
+  }
 }
 
 // ==========================================
