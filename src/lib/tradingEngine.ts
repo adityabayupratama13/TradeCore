@@ -306,11 +306,8 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const execVersionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
     const engineVersionForExec = execVersionSetting?.value || 'v1';
 
-    // V4 Block: Prevent priceWatcher from forcing AI execution on non-liquid pairs
-    if (engineVersionForExec === 'v4' && !isLiquidPair(symbol)) {
-      console.log(`[V4-BLOCK] ${symbol} is not a liquid pair. Bypassing AI trigger.`);
-      return;
-    }
+    // V4 Block: Removed per user request. V4 now scans ALL coins for scalping/daytrading
+    // (It retains BTC Regime Gate and Balance-Aware Leverage protections but drops the pair whitelist)
 
     // FIX: DB-level per-symbol execution lock to prevent race condition double entries
     // Two concurrent AI calls can both pass the Binance position check before either completes
@@ -432,14 +429,7 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     let pairsToAnalyze = availablePairs.slice(0, aiScanLimit);
 
     // V4: Filter out non-liquid pairs (meme coins etc.) before sending to AI
-    if (engineVersion === 'v4') {
-      const originalCount = pairsToAnalyze.length;
-      pairsToAnalyze = pairsToAnalyze.filter((p: any) => isLiquidPair(p.symbol));
-      const removedCount = originalCount - pairsToAnalyze.length;
-      if (removedCount > 0) {
-        console.log(`[V4] Filtered out ${removedCount} non-liquid pairs. Remaining: ${pairsToAnalyze.map((p: any) => p.symbol).join(', ')}`);
-      }
-    }
+    // Removed per user request. V4 now scans ALL coins like V3 for aggressive scalping.
     // Hunter sudah sort by score, jadi slice pertama = pair terbaik
 
     console.log(`🔍 Slots tersedia: ${availableSlots} — Mengirim ${pairsToAnalyze.length}/${availablePairs.length} pair ke AI (Engine: ${engineVersion.toUpperCase()}) (Mode: ${riskRule?.activeMode || 'SAFE'})...`);

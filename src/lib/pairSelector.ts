@@ -377,18 +377,12 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   // STEP 5 - SELECT ACTIVE TRADING PAIRS
   let finalActive: any[] = [];
   
-  if (engineVersion === 'v4') {
-    // V4 ONLY uses the hardcoded liquid whitelist
-    const v4Pairs = scoredPairs.filter(p => V4_LIQUID_PAIRS.has(p.symbol));
-    finalActive = v4Pairs.map(p => ({ ...p, tier: 'ACTIVE' as const }));
-    console.log(`[V4 Hunter] Enforced whitelist. Selected ${finalActive.length} liquid pairs.`);
-  } else {
-    // Legacy V1-V3 behavior: dynamic selection
-    const top20 = scoredPairs
-      .filter(p => p.fundingCategory !== 'NORMAL')
-      .slice(0, 20);
-    finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
-  }
+  // V4 now uses the same dynamic selection as V3 (user request)
+  // Dynamic selection finds high volatility / extreme funding pairs for scalping
+  const top20 = scoredPairs
+    .filter(p => p.fundingCategory !== 'NORMAL')
+    .slice(0, 20);
+  finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
   
   console.log('🎯 Final active pairs:', finalActive.map(p => p.symbol));
 
