@@ -747,13 +747,12 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
        await logEngine({ symbol, action: signal.action, signal, result: 'BLOCKED', reason: `Quantity too small: ${quantity}` });
        return; 
     }
-    // FIX 4: Min margin $1 → $5. Binance round-trip fee ~0.08% of position value.
-    // Pada margin $1 dengan leverage 10x = $10 position → fee = $0.008 per side ≈ $0.016 total.
-    // Pada margin $5 dengan leverage 5x = $25 position → fee = $0.02 total. Masih worth it.
-    // Di bawah $5 margin, fee dapat menggerus profit secara signifikan pada small account.
-    if (margin < 5.0) {
-      console.log(`Position margin ${margin.toFixed(2)} < $5, skipping (fees would eat profit on small account)`);
-      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Calculated margin $${margin.toFixed(2)} < $5 minimum (fee protection)` });
+    // Min margin guard: balance $51 × risk 2% = $1.02 risk → margin ~$2-3 at 8x lev
+    // $5 threshold was blocking 100% of all valid trades on small accounts
+    // $2 threshold: $2 margin × 8x = $16 position → fee $0.013 round-trip (still worth it)
+    if (margin < 2.0) {
+      console.log(`Position margin ${margin.toFixed(2)} < $2, skipping (too small for fees)`);
+      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Calculated margin $${margin.toFixed(2)} < $2 minimum (fee protection)` });
       return;
     }
 
