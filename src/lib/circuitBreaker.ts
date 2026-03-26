@@ -56,6 +56,10 @@ async function calculateMetrics(
   const rules = await prisma.riskRule.findFirst({ where: { isActive: true } });
   const portfolio = await prisma.portfolio.findFirst();
   const startingCapital = portfolio?.totalCapital || 1;
+  // FIX 5: Log capital baseline agar mudah diverifikasi di console.
+  // Nilai ini harus = real Binance USDT balance setelah app restart + 1 engine cycle.
+  // Jika nilainya tidak match, cek apakah portfolio.totalCapital sudah diupdate oleh engine.
+  console.log(`[CB] Capital baseline: $${startingCapital.toFixed(2)} (from portfolio DB)`);
 
   const targetSetting = await prisma.appSettings.findUnique({ where: { key: 'daily_profit_target_usd' } });
   const dailyProfitTarget = targetSetting ? parseFloat(targetSetting.value) : 350;

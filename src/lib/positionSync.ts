@@ -132,7 +132,11 @@ export async function syncPositions(): Promise<void> {
           const recentTrades = await getUserTrades(trade.symbol, 20);
           // Find close trades (reduce-only) that happened after entry
           const entryTime = trade.entryAt ? new Date(trade.entryAt).getTime() : 0;
-          const closeTrades = recentTrades.filter(t => t.time > entryTime);
+          // FIX 1: Filter by opposite side to avoid counting entry fills or unrelated trades.
+          // Only "closing" fills (opposite side of position direction) count as exit trades.
+          const isLongPos = trade.direction === 'LONG' || trade.direction === 'BUY';
+          const closeSide = isLongPos ? 'SELL' : 'BUY';
+          const closeTrades = recentTrades.filter(t => t.time > entryTime && t.side === closeSide);
           
           if (closeTrades.length > 0) {
             // Calculate volume-weighted average exit price

@@ -691,7 +691,9 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
     }
 
     // NEW FIX 4: TP MINIMUM 15% ENFORCE
-    signal = enforceMinProfitTarget(signal, margin * leverage, totalWalletBalance, riskRule?.minProfitTargetPct ?? 15);
+    // FIX 2: Turunkan default dari 15% → 5%. 15% terlalu agresif untuk small account ($58).
+    // Nilai 15% memaksa TP terlalu jauh, sehingga TP jarang kena dan kebanyakan kena SL duluan.
+    signal = enforceMinProfitTarget(signal, margin * leverage, totalWalletBalance, riskRule?.minProfitTargetPct ?? 5);
     
     // Round signal targets gracefully Native limits
     try {
@@ -708,9 +710,13 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
        await logEngine({ symbol, action: signal.action, signal, result: 'BLOCKED', reason: `Quantity too small: ${quantity}` });
        return; 
     }
-    if (margin < 1.0) {
-      console.log(`Position margin ${margin.toFixed(2)} < $1, skipping`);
-      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Calculated margin < $1` });
+    // FIX 4: Min margin $1 → $5. Binance round-trip fee ~0.08% of position value.
+    // Pada margin $1 dengan leverage 10x = $10 position → fee = $0.008 per side ≈ $0.016 total.
+    // Pada margin $5 dengan leverage 5x = $25 position → fee = $0.02 total. Masih worth it.
+    // Di bawah $5 margin, fee dapat menggerus profit secara signifikan pada small account.
+    if (margin < 5.0) {
+      console.log(`Position margin ${margin.toFixed(2)} < $5, skipping (fees would eat profit on small account)`);
+      await logEngine({ symbol, action: signal.action, signal, result: 'SKIPPED', reason: `Calculated margin $${margin.toFixed(2)} < $5 minimum (fee protection)` });
       return;
     }
 
@@ -1009,10 +1015,22 @@ export function enforceMinProfitTarget(
   const potentialProfit = positionValue * tpDistancePct;
   const profitAsPctOfCapital = (potentialProfit / totalCapital) * 100;
 
+  // FIX 3: Fee Guard — skip jika potensi profit < 3x estimated round-trip fee.
+  // Binance maker/taker fee ≈ 0.04% per side = 0.08% round trip.
+  // Kalau profit bruto < 3× fee, secara statistik akan rugi setelah beberapa trade.
+  const estimatedFeeUsd = positionValue * 0.0008; // 0.08% round trip
+  if (potentialProfit < estimatedFeeUsd * 3 && signal.action !== 'SKIP') {
+    console.log(`⚠️ [FEE GUARD] ${signal.symbol} potential profit $${potentialProfit.toFixed(4)} < 3x fee $${(estimatedFeeUsd*3).toFixed(4)}. SKIP.`);
+    signal.action = 'SKIP';
+    signal.reasoning = `Fee guard: profit too small vs trading cost`;
+    return signal;
+  }
+
   console.log(`🎯 TP analysis:
     Potential profit: ${potentialProfit.toFixed(2)} USDT
     As % of capital: ${profitAsPctOfCapital.toFixed(2)}%
-    Minimum target: ${minProfitTargetPct}%`);
+    Minimum target: ${minProfitTargetPct}%
+    Est. fees: $${estimatedFeeUsd.toFixed(4)} (3x = $${(estimatedFeeUsd*3).toFixed(4)})`);
 
   if (profitAsPctOfCapital < minProfitTargetPct) {
     const requiredTpDistancePct = (totalCapital * minProfitTargetPct / 100) / positionValue;
