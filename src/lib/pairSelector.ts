@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { fetchOIDataRaw } from './binance';
+import { V4_LIQUID_PAIRS } from './btcRegime';
 
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
 const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
@@ -170,6 +171,9 @@ async function fetchOIData(symbol: string, priceChange: number, fundingRate: num
 
 export async function runDynamicHunter(): Promise<HunterResult> {
   const OVERRIDE_ACTIVE = false;  // set false to re-enable hunter
+  
+  const versionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+  const engineVersion = versionSetting?.value || 'v1';
   
   if (OVERRIDE_ACTIVE) {
     const ACTIVE_PAIRS_OVERRIDE = [
@@ -371,15 +375,20 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   });
 
   // STEP 5 - SELECT ACTIVE TRADING PAIRS
-  // Select top 20 from scored pairs
-  const top20 = scoredPairs
-    .filter(p => p.fundingCategory !== 'NORMAL')
-    .slice(0, 20);
-
-  // No hardcoded padding anymore! 
-  // We depend 100% organically on the dynamic search.
-
-  const finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
+  let finalActive: any[] = [];
+  
+  if (engineVersion === 'v4') {
+    // V4 ONLY uses the hardcoded liquid whitelist
+    const v4Pairs = scoredPairs.filter(p => V4_LIQUID_PAIRS.has(p.symbol));
+    finalActive = v4Pairs.map(p => ({ ...p, tier: 'ACTIVE' as const }));
+    console.log(`[V4 Hunter] Enforced whitelist. Selected ${finalActive.length} liquid pairs.`);
+  } else {
+    // Legacy V1-V3 behavior: dynamic selection
+    const top20 = scoredPairs
+      .filter(p => p.fundingCategory !== 'NORMAL')
+      .slice(0, 20);
+    finalActive = top20.map(p => ({ ...p, tier: 'ACTIVE' as const }));
+  }
   
   console.log('🎯 Final active pairs:', finalActive.map(p => p.symbol));
 

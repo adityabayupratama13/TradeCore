@@ -302,6 +302,16 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
 
     if (currentSymbols.has(symbol)) return;
 
+    // Fetch Engine Version (default v1)
+    const execVersionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+    const engineVersionForExec = execVersionSetting?.value || 'v1';
+
+    // V4 Block: Prevent priceWatcher from forcing AI execution on non-liquid pairs
+    if (engineVersionForExec === 'v4' && !isLiquidPair(symbol)) {
+      console.log(`[V4-BLOCK] ${symbol} is not a liquid pair. Bypassing AI trigger.`);
+      return;
+    }
+
     // FIX: DB-level per-symbol execution lock to prevent race condition double entries
     // Two concurrent AI calls can both pass the Binance position check before either completes
     const execLockKey = `exec_lock_${symbol}`;
