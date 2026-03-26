@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { usePathname } from "next/navigation";
 import { formatUSD, formatPnL } from '@/lib/formatters';
@@ -176,10 +176,10 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
           <span className="hidden md:block text-[10px] text-gray-400 font-medium uppercase tracking-wider">AI Engine</span>
           <div className="text-[10px] md:text-[11px] px-2 py-0.5 md:mt-0.5 rounded font-bold tracking-widest text-center hover:bg-opacity-40 transition-all border border-transparent" 
                style={{ 
-                 color: statusData.engineVersion === 'v3' ? '#10b981' : statusData.engineVersion === 'v2' ? '#a855f7' : '#3b82f6', 
-                 backgroundColor: statusData.engineVersion === 'v3' ? 'rgba(16, 185, 129, 0.15)' : statusData.engineVersion === 'v2' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                 color: statusData.engineVersion === 'v4' ? '#f59e0b' : statusData.engineVersion === 'v3' ? '#10b981' : statusData.engineVersion === 'v2' ? '#a855f7' : '#3b82f6', 
+                 backgroundColor: statusData.engineVersion === 'v4' ? 'rgba(245,158,11,0.15)' : statusData.engineVersion === 'v3' ? 'rgba(16, 185, 129, 0.15)' : statusData.engineVersion === 'v2' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.15)',
                }}>
-            {statusData.engineVersion === 'v3' ? '🎯 V3 (SNIPER)' : statusData.engineVersion === 'v2' ? '🚀 V2 (SMC)' : '⚡ V1 (CLASSIC)'}
+            {statusData.engineVersion === 'v4' ? 'V4 (SMART)' : statusData.engineVersion === 'v3' ? 'V3 (SNIPER)' : statusData.engineVersion === 'v2' ? 'V2 (SMC)' : 'V1 (CLASSIC)'}
           </div>
         </div>
 
