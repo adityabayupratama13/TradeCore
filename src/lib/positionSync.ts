@@ -1,4 +1,4 @@
-import { getPositions, getOpenAlgoOrders, placeAlgoOrder, getUserTrades } from './binance';
+import { getPositions, getOpenAlgoOrders, getOpenOrders, placeAlgoOrder, getUserTrades } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { getCoinCategory } from './coinCategories';
@@ -23,12 +23,20 @@ export async function syncPositions(): Promise<void> {
       if (existing) {
         let hasSL = false;
         try {
-           const openOrders = await getOpenAlgoOrders(pos.symbol);
-           const slOrder = openOrders.find((o: any) => o.orderType === 'STOP_MARKET' || o.orderType === 'STOP');
-           if (slOrder) {
+           const [algoOrders, normalOrders] = await Promise.all([
+               getOpenAlgoOrders(pos.symbol),
+               getOpenOrders(pos.symbol)
+           ]);
+           
+           // Binance returns type as 'type' in openOrders, but 'orderType' in algoOrders
+           const slAlgo = algoOrders.find((o: any) => o.orderType === 'STOP_MARKET' || o.orderType === 'STOP');
+           const slNormal = normalOrders.find((o: any) => o.type === 'STOP_MARKET' || o.type === 'STOP');
+           
+           if (slAlgo || slNormal) {
                hasSL = true;
-               if (!existing.slAlgoId || existing.slAlgoId !== slOrder.algoId.toString()) {
-                   await prisma.trade.update({ where: { id: existing.id }, data: { slAlgoId: slOrder.algoId.toString() } });
+               const foundId = slAlgo ? slAlgo.algoId?.toString() : slNormal?.orderId?.toString();
+               if (foundId && (!existing.slAlgoId || existing.slAlgoId !== foundId)) {
+                   await prisma.trade.update({ where: { id: existing.id }, data: { slAlgoId: foundId } });
                }
            }
         } catch(e) {
