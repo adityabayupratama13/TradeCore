@@ -384,7 +384,7 @@ export async function runDynamicHunter(): Promise<HunterResult> {
   else if (engineVersion === 'v4') topCoinsCount = 30;
 
   const topCoins = scoredPairs
-    .filter(p => engineVersion === 'v4' ? true : p.fundingCategory !== 'NORMAL')
+    .filter(p => (engineVersion === 'v4' || engineVersion === 'v3') ? true : p.fundingCategory !== 'NORMAL')
     .slice(0, topCoinsCount);
   finalActive = topCoins.map(p => ({ ...p, tier: 'ACTIVE' as const }));
   
