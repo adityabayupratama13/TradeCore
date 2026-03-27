@@ -109,6 +109,25 @@ const ENGINE_PRESETS: Record<string, {
     maxOpenPositions: 3,
     maxDailyLossPct: 10,
   },
+
+  // ─────────────────────────────────────────
+  // V5: Macro Day-Trader — Strictly gated low frequency
+  // ─────────────────────────────────────────
+  v5: {
+    riskPctLargeCap: 2.0,
+    riskPctMidCap: 2.5,
+    riskPctLowCap: 2.5,
+    leverageLargeCap: 10,
+    leverageMidCap: 10,
+    leverageLowCap: 10,
+    maxLeverageLarge: 15,
+    maxLeverageMid: 15,
+    maxLeverageLow: 15,
+    minConfidence: 50,      // relaxed confidence, but macro gated
+    minProfitTargetPct: 0,
+    maxOpenPositions: 3,
+    maxDailyLossPct: 10,
+  },
 };
 
 export async function GET() {
@@ -124,8 +143,8 @@ export async function POST(req: Request) {
   try {
     const { version, applyPreset = true } = await req.json();
     
-    if (!['v1', 'v2', 'v3', 'v4'].includes(version)) {
-      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1, v2, v3, or v4' }, { status: 400 });
+    if (!['v1', 'v2', 'v3', 'v4', 'v5'].includes(version)) {
+      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1-v5' }, { status: 400 });
     }
 
     // Save engine version

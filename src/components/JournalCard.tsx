@@ -58,12 +58,13 @@ export function JournalCard({ entry, onClick, onEdit, onDelete }: JournalCardPro
               )}
               {t && (
                 <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
+                  (t.engineVersion || 'v1') === 'v5' ? 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/20' :
                   (t.engineVersion || 'v1') === 'v4' ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20' :
                   (t.engineVersion || 'v1') === 'v3' ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/20' : 
-                  t.engineVersion === 'v2' ? 'bg-[#a855f7]/10 text-[#a855f7] border-[#a855f7]/20' : 
+                  (t.engineVersion || 'v1') === 'v2' ? 'bg-[#a855f7]/10 text-[#a855f7] border-[#a855f7]/20' : 
                   'bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/20'
                 }`}>
-                  {(t.engineVersion || 'v1') === 'v4' ? '⚡ V4' : (t.engineVersion || 'v1') === 'v3' ? '🎯 V3' : t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
+                  {(t.engineVersion || 'v1') === 'v5' ? '🌎 V5' : (t.engineVersion || 'v1') === 'v4' ? '⚡ V4' : (t.engineVersion || 'v1') === 'v3' ? '🎯 V3' : t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
                 </span>
               )}
             </div>

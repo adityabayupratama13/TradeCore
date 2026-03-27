@@ -21,7 +21,7 @@ export function RiskRulesForm() {
   const [showDegenModal, setShowDegenModal] = useState(false);
   const [degenInput, setDegenInput] = useState("");
   
-  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'>('v1');
+  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'|'v5'>('v1');
   const [isEngineSaving, setIsEngineSaving] = useState(false);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function RiskRulesForm() {
     }
   };
 
-  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4') => {
+  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4'|'v5') => {
     if (ver === engineVer) return;
     setIsEngineSaving(true);
     try {
@@ -111,7 +111,7 @@ export function RiskRulesForm() {
       });
       if (res.ok) {
         setEngineVer(ver);
-        const label = ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
+        const label = ver === 'v5' ? 'V5 Macro Day-Trader' : ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
         showToastMsg(`✅ Engine → ${label} (preset applied)`, 'success');
         // Reload risk rules so Custom Override panel shows new preset values
         try {
@@ -473,6 +473,28 @@ export function RiskRulesForm() {
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       Engine berperilaku seakan punya modal sebesar ini, meski akun demo saldo lebih besar. Set 0 untuk nonaktifkan.
                     </p>
+                  </div>
+
+                  <div 
+                    onClick={() => changeEngine('v5')}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 ${
+                      engineVer === 'v5' ? 'border-[#ef4444] bg-[#ef4444]/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-gray-800 hover:border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🌎</span>
+                        <span className={`font-bold ${
+                          engineVer === 'v5' ? 'bg-gradient-to-r from-[#ef4444] to-[#f43f5e] text-transparent bg-clip-text' : 'text-gray-300'
+                        }`}>V5 Macro Day-Trader</span>
+                      </div>
+                      <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        engineVer === 'v5' ? 'bg-gradient-to-r from-[#ef4444] to-[#f43f5e] text-white' : 'text-gray-400 hover:text-white'
+                      }`}>
+                        DAY TRADING
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">Integrasi Geopolitik, Kalender Rilis Makro & Siklus Institusi. AI murni sebagai eksekutor SMC Sniper TF 1H. Sangat Santai.</p>
                   </div>
                 </div>
                 <div className="flex gap-3 items-center">

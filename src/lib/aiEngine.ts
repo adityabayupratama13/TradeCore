@@ -889,6 +889,195 @@ export async function analyzeMarketV4(
 }
 
 // ==========================================
+// ENGINE V5: MACRO DAY-TRADER
+// Explicit Macro Gating & Strict SMC Trigger
+// ==========================================
+
+async function validateWithAIV5(
+  symbol: string,
+  entry: EntrySetup,
+  structure: any,
+  levels: any,
+  currentPrice: number,
+  macroCtx: any
+): Promise<{ action: 'CONFIRM' | 'REJECT'; reasoning: string; confidence?: number }> {
+  
+  const supportStr = levels.nearestSupport ? `${levels.nearestSupport.midpoint.toFixed(6)}` : 'None';
+  const resistStr = levels.nearestResistance ? `${levels.nearestResistance.midpoint.toFixed(6)}` : 'None';
+
+  const prompt = `[COMMAND: MACRO DAY-TRADER (V5)]
+Kamu adalah penembak jitu algoritma kuantitatif institusi.
+
+STATUS MAKRO & ALIRAN UANG SAAT INI:
+- Global Macro: ${macroCtx?.macro.status} (${macroCtx?.macro.narrative})
+- Crypto Money Flow: ${macroCtx?.flow.status} (${macroCtx?.flow.narrative})
+- Waktu / Kalender: ${macroCtx?.calendar.status} (${macroCtx?.calendar.narrative})
+
+TARGET SETUP & LOKASI:
+- Symbol: ${symbol}
+- Action yang diminta: ${entry.side}
+- Harga Masuk: ${currentPrice}
+- Stop Loss: ${entry.stopLoss.toFixed(6)} (${entry.slDistance.toFixed(2)}% dari entri)
+- 4H Bias: ${structure.structure} (${structure.strength})
+- Support Terdekat: ${supportStr}
+- Resistance Terdekat: ${resistStr}
+- Pemicu (Trigger): ${entry.triggerType}
+
+INSTRUKSI EKSEKUSI MUTLAK:
+1. Keselarasan Makro: Jika Macro = RISK_OFF, kamu HANYA boleh Short. Jika Macro = RISK_ON, kamu HANYA boleh Long.
+2. Analisa Smart Money Concepts (SMC): Cari Fair Value Gap (FVG) atau Order Block (OB) tersembunyi yang bertepatan dengan tarikan Fibonacci 0.705 (Optimal Trade Entry) berdasarkan jarak SL dan Support/Resistance.
+3. Kualitas: Abaikan MACD lag. Evaluasi kekuatan struktur harga menahan benturan.
+4. Tolak (REJECT) jika setup berlawanan arah dengan arah uang makro.
+
+JSON only:
+{"action":"CONFIRM"|"REJECT","reasoning":"max 20 kata alasannya","confidence":0-100}`;
+
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+  const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+  const AI_MODEL = process.env.AI_MODEL || 'google/gemini-2.5-flash-lite-preview-06-17';
+
+  try {
+    const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.05,
+        max_tokens: 250
+      })
+    });
+
+    if (!res.ok) throw new Error(`AI API Error: ${res.statusText}`);
+
+    const aiData = await res.json();
+    let content = aiData.choices[0].message.content.trim();
+    if (content.startsWith('\`\`\`json')) {
+      content = content.replace(/^\`\`\`json\n?/, '').replace(/\n?\`\`\`$/, '');
+    }
+    const result = JSON.parse(content);
+
+    return {
+      action: result.action === 'CONFIRM' ? 'CONFIRM' : 'REJECT',
+      reasoning: result.reasoning || 'No reason',
+      confidence: result.confidence
+    };
+  } catch (err) {
+    console.warn(`[V5] AI validation failed:`, err);
+    return { action: 'CONFIRM', reasoning: 'AI unavailable, macro-algo confirmed', confidence: 60 };
+  }
+}
+
+export async function analyzeMarketV5(
+  symbol: string,
+  triggerData: any = null,
+  activeMode: string = 'SAFE',
+  macroCtx: any = null
+): Promise<TradeSignal> {
+  try {
+    const [klines5m, klines15m, klines1h, klines4h, markPriceObj] = await Promise.all([
+      getKlines(symbol, '5m', 30).catch(() => null),
+      getKlines(symbol, '15m', 50),
+      getKlines(symbol, '1h', 50),
+      getKlines(symbol, '4h', 30),
+      getMarkPrice(symbol)
+    ]);
+
+    const currentPrice = markPriceObj.markPrice;
+
+    // Layer 1: HTF Structure
+    const structure = analyzeHTFStructure(klines4h, currentPrice);
+
+    // Layer 2: Key Level Detection
+    const levels = detectKeyLevels(klines1h, klines15m, currentPrice);
+
+    if (levels.allLevels.length === 0) {
+      return {
+        symbol, action: 'SKIP', confidence: 0, reasoning: 'V5: No key levels found',
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'NO_LEVELS', analyzedAt: new Date()
+      };
+    }
+
+    // Layer 3: Entry Trigger (Wider SL for Day Trading)
+    const entry = checkEntryTrigger(klines15m, klines5m, structure.bias, levels, currentPrice, true);
+
+    if (!entry.triggered) {
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence, reasoning: `V5: ${entry.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'NO_TRIGGER', analyzedAt: new Date()
+      };
+    }
+
+    // Confidence base check
+    if (entry.confidence < 50) {
+      console.log(`   [V5-L3] ${symbol}: Low base confidence ${entry.confidence}. SKIP.`);
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence,
+        reasoning: `V5: Low base confidence ${entry.confidence}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'LOW_CONF', analyzedAt: new Date()
+      };
+    }
+
+    // Layer 4: AI Context Validation
+    const aiValidation = await validateWithAIV5(symbol, entry, structure, levels, currentPrice, macroCtx);
+
+    if (aiValidation.action === 'REJECT') {
+      return {
+        symbol, action: 'SKIP', confidence: entry.confidence * 0.5,
+        reasoning: `V5 AI rejected: ${aiValidation.reasoning}`,
+        entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+        entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'AI_REJECT', analyzedAt: new Date()
+      };
+    }
+
+    const finalConfidence = Math.min(Math.round((entry.confidence + (aiValidation.confidence || entry.confidence)) / 2), 95);
+    console.log(`   [V5-L4] ${symbol}: ✅ AI CONFIRMED (conf=${finalConfidence})`);
+
+    const signal: TradeSignal = {
+      symbol,
+      action: entry.side,
+      confidence: finalConfidence,
+      reasoning: `V5 Macro: ${entry.triggerType}. Macro=${macroCtx?.macro?.status}`,
+      entryPrice: currentPrice,
+      stopLoss: entry.stopLoss,
+      takeProfit: entry.takeProfit1,
+      leverage: 1, // Will be set by engine
+      riskReward: entry.riskReward,
+      entryUrgency: 'MARKET',
+      pullbackPct: null,
+      keySignal: entry.triggerType.split(' + ')[0] || 'V5_MACRO',
+      estimatedDuration: '4-24h',
+      analyzedAt: new Date(),
+      v3Data: {
+        tp1: entry.takeProfit1,
+        tp2: entry.takeProfit2,
+        tp3: entry.takeProfit3,
+        slDistance: entry.slDistance,
+        structure: structure.structure,
+        strength: structure.strength,
+        triggerType: entry.triggerType
+      }
+    } as any;
+
+    return await roundSignalPrices(signal, symbol);
+
+  } catch (error) {
+    console.error(`V5 Analysis Failed for ${symbol}`, error);
+    return {
+      symbol, action: 'SKIP', confidence: 0, reasoning: `V5 error: ${error}`,
+      entryPrice: null, stopLoss: null, takeProfit: null, leverage: 1, riskReward: null,
+      entryUrgency: 'MARKET', pullbackPct: null, keySignal: 'V5_ERROR', analyzedAt: new Date()
+    };
+  }
+}
+
+// ==========================================
 // ENGINE V3: SNIPER MODE ANALYSIS
 // AI as VALIDATOR, not decision maker
 // ==========================================

@@ -1,6 +1,6 @@
 import { getPositions, getBalance, enterTrade, closePosition, placeOrder, cancelAllOrders, getMarkPrice, getKlines, getSymbolPrecision, placeAlgoOrder, cancelAlgoOrder, roundPrice, roundQuantity, getOpenAlgoOrders } from './binance';
 import { FALLBACK_PAIRS, MIN_CONFIDENCE_FULL, MIN_CONFIDENCE_HALF } from './constants';
-import { analyzeMarket, analyzeMarketV3, analyzeMarketV4, calculateATR } from './aiEngine';
+import { analyzeMarket, analyzeMarketV3, analyzeMarketV4, analyzeMarketV5, calculateATR } from './aiEngine';
 import { manageV3Trade, saveV3TPLevels, V3TPLevels } from './partialTPManager';
 import { syncPositions } from './positionSync';
 import { prisma } from '../../lib/prisma';
@@ -8,6 +8,7 @@ import { sendTelegramAlert } from './telegram';
 import { checkAndEnforceCircuitBreaker } from './circuitBreaker';
 import { getCoinCategory } from './coinCategories';
 import { checkBtcRegime, isLiquidPair, getV4Leverage } from './btcRegime';
+import { fetchFullMacroContext } from './macroContext';
 
 let cycleNumber = 0;
 
@@ -414,15 +415,25 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
     const engineVersion = versionSetting?.value || 'v1';
 
     // V4: Check BTC regime ONCE before analyzing all pairs
-    // This avoids redundant API calls and ensures consistent regime across all pair analyses this cycle
     let btcRegime: Awaited<ReturnType<typeof checkBtcRegime>> | null = null;
     if (engineVersion === 'v4') {
       btcRegime = await checkBtcRegime();
       console.log(`[V4] BTC Regime: ${btcRegime.regime} | Allow LONG: ${btcRegime.allowLong} | Allow SHORT: ${btcRegime.allowShort}`);
     }
 
-    // OPTIMIZATION: Di V3 (100 koin) dan V4 (30 koin) kita kirim SEMUA koin untuk dijaring
-    const aiScanLimit = (engineVersion === 'v4' || engineVersion === 'v3') ? availablePairs.length : Math.min(availableSlots * 3, availablePairs.length);
+    // V5: Fetch Global Macro Context ONCE
+    let v5Macro: any = null;
+    if (engineVersion === 'v5') {
+      v5Macro = await fetchFullMacroContext();
+      console.log(`[V5 MACRO] Global: ${v5Macro.macro.status} | Flow: ${v5Macro.flow.status} | Time: ${v5Macro.calendar.status}`);
+      if (v5Macro.calendar.status === 'RED_ZONE') {
+          console.log(`[V5 RED ZONE] Trading forcefully blocked during US Market Open / Red Zone. Sleeping...`);
+          return;
+      }
+    }
+
+    // OPTIMIZATION: Di V3, V4, V5 kita kirim SEMUA koin untuk dijaring
+    const aiScanLimit = (engineVersion === 'v5' || engineVersion === 'v4' || engineVersion === 'v3') ? availablePairs.length : Math.min(availableSlots * 3, availablePairs.length);
     let pairsToAnalyze = availablePairs.slice(0, aiScanLimit);
 
     // V4: Filter out non-liquid pairs (meme coins etc.) before sending to AI
@@ -442,7 +453,27 @@ export async function executeAIAndTrade(symbol: string, triggerData: any = null,
         
         const aiPromises = batch.map(async (pair: any) => {
             try {
-                if (engineVersion === 'v4') {
+                if (engineVersion === 'v5') {
+                    // V5: Macro Day-Trader 
+                    const signal = await analyzeMarketV5(
+                        pair.symbol,
+                        pair.symbol === symbol ? triggerData : null,
+                        riskRule?.activeMode || 'SAFE',
+                        v5Macro
+                    );
+                    
+                    // Post-filter: Macro alignment
+                    if (signal.action === 'LONG' && v5Macro?.macro.blockAction === 'ALLOW_SHORT_ONLY') {
+                        console.log(`[V5-GATE] ${pair.symbol}: LONG blocked by Macro (Risk-Off)`);
+                        return { ...signal, action: 'SKIP' as const, reasoning: `V5 Macro gate: SHORT ONLY` };
+                    }
+                    if (signal.action === 'SHORT' && v5Macro?.macro.blockAction === 'ALLOW_LONG_ONLY') {
+                        console.log(`[V5-GATE] ${pair.symbol}: SHORT blocked by Macro (Risk-On)`);
+                        return { ...signal, action: 'SKIP' as const, reasoning: `V5 Macro gate: LONG ONLY` };
+                    }
+
+                    return signal;
+                } else if (engineVersion === 'v4') {
                     // V4: BTC regime gate — skip if signal direction blocked by BTC regime
                     const signal = await analyzeMarketV4(
                         pair.symbol,
