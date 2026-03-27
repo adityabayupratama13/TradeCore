@@ -30,6 +30,11 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
     const d = message.data;
 
     const dirEmoji = (dir: string) => dir === 'LONG' ? '🟢 LONG' : '🔴 SHORT';
+    
+    // Ambil info engine saat ini
+    const evSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+    const evStr = (evSetting?.value || 'v1').toUpperCase();
+    const evBadge = evStr === 'V5' ? '🌎 V5' : evStr === 'V4' ? '⚡ V4' : evStr === 'V3' ? '🎯 V3' : evStr === 'V2' ? '🚀 V2' : '⚡ V1';
 
     switch (message.type) {
       case 'TEST':
@@ -100,7 +105,7 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
 
       case 'AI_SIGNAL': {
         const side = d.action === 'LONG' ? '🟢' : '🔴';
-        text = '🤖 AI SIGNAL — ' + d.confidence + '% confidence\n'
+        text = '🤖 AI SIGNAL [' + evBadge + '] — ' + d.confidence + '% confidence\n'
           + '━━━━━━━━━━━━━━\n'
           + side + ' ' + d.action + ' ' + d.symbol + '\n'
           + '💵 Entry: ' + d.entryPrice + '\n'
@@ -112,7 +117,7 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
       }
 
       case 'AI_SKIP':
-        text = '🔍 AI ANALYZED — SKIP\n'
+        text = '🔍 AI ANALYZED [' + evBadge + '] — SKIP\n'
           + '━━━━━━━━━━━━━━\n'
           + '📊 ' + d.symbol + ' — ' + d.confidence + '% confidence\n'
           + '❌ Reason: ' + d.reasoning;
@@ -151,7 +156,7 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
 
       case 'TRADE_OPEN': {
         const side = (d.direction || '').includes('LONG') ? '🟢' : '🔴';
-        text = side + ' TRADE OPENED\n'
+        text = side + ' TRADE OPENED [' + evBadge + ']\n'
           + '━━━━━━━━━━━━━━\n'
           + dirEmoji(d.direction) + ' ' + d.symbol + ' @ ' + (d.entryPrice || d.price) + '\n'
           + '📦 Size: ' + d.size + ' | ⚡ Lev: ' + d.leverage + 'x\n'
