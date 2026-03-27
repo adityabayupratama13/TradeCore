@@ -3,7 +3,7 @@ import { fetchOIDataRaw } from './binance';
 import { V4_LIQUID_PAIRS } from './btcRegime';
 
 const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || 'https://fapi.binance.com';
-const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT'];
+const INDEX_SYMBOLS = ['BTCDOMUSDT','DEFIUSDT','ALTUSDT','BNXUSDT','PAXGUSDT','XAUUSDT'];
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 function chunks<T>(arr: T[], size: number): T[][] {
