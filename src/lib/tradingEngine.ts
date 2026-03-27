@@ -715,13 +715,8 @@ async function executeTradeSignal(signal: any, portfolio: any, availableBalance:
       return;
     }
 
-    if (positionValue > availableBalance * 15) {
-      console.error(`❌ Position $${positionValue.toFixed(2)} > 15x balance. BLOCKED.`);
-      return;
-    }
-
-    if (margin > availableBalance * 0.40) {
-      console.error(`❌ Margin $${margin.toFixed(2)} > 40% balance. BLOCKED.`);
+    if (positionValue > availableBalance * 25) {
+      console.error(`❌ Position $${positionValue.toFixed(2)} > 25x balance. BLOCKED.`);
       return;
     }
 
@@ -1006,8 +1001,17 @@ export async function calculatePositionSize(
   const rawSlDistance = Math.abs(entryPrice - stopLoss);
   const effectiveSlDistance = rawSlDistance * 1.20; // 20% slippage gap buffer
 
-  const positionValue = riskAmount / (effectiveSlDistance / entryPrice);
-  const margin = positionValue / leverage;
+  let positionValue = riskAmount / (effectiveSlDistance / entryPrice);
+  let margin = positionValue / leverage;
+
+  // SECURE EXPOSURE CAP: Prevent tight SLs from demanding excessive margin that blocks the trade
+  const MAX_MARGIN_CAP = totalCapital * 0.40;
+  if (margin > MAX_MARGIN_CAP) {
+    console.log(`⚠️ Tight SL scale-down: Margin $${margin.toFixed(2)} exceeds 40% cap ($${MAX_MARGIN_CAP.toFixed(2)}). Shrinking position size.`);
+    margin = MAX_MARGIN_CAP;
+    positionValue = margin * leverage;
+  }
+
   const rawQuantity = positionValue / entryPrice;
   // Apply binance scaling step sizes natively handling maxQty bounds
   const quantity = await roundQuantity(symbol, rawQuantity).catch(() => {
