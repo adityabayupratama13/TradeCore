@@ -24,6 +24,7 @@ const ENGINE_PRESETS: Record<string, {
   minProfitTargetPct: number;
   maxOpenPositions: number;
   maxDailyLossPct: number;
+  maxWeeklyLossPct?: number;
 }> = {
 
   // ─────────────────────────────────────────
@@ -127,6 +128,7 @@ const ENGINE_PRESETS: Record<string, {
     minProfitTargetPct: 0,
     maxOpenPositions: 3,
     maxDailyLossPct: 10,
+    maxWeeklyLossPct: 50,
   },
 };
 
@@ -177,6 +179,7 @@ export async function POST(req: Request) {
             minProfitTargetPct: preset.minProfitTargetPct,
             maxOpenPositions: preset.maxOpenPositions,
             maxDailyLossPct: preset.maxDailyLossPct,
+            maxWeeklyLossPct: preset.maxWeeklyLossPct,
           }
         });
         presetApplied = true;

@@ -52,11 +52,12 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
   }, []);
 
   const fetchStatus = () => {
+    const tParam = `?t=${Date.now()}`;
     Promise.all([
-      fetch('/api/portfolio').then(res => res.json()),
-      fetch('/api/performance/today').then(res => res.json()),
-      fetch('/api/risk/status').then(res => res.json()),
-      fetch('/api/engine/version').then(res => res.json())
+      fetch('/api/portfolio' + tParam).then(res => res.json()),
+      fetch('/api/performance/today' + tParam).then(res => res.json()),
+      fetch('/api/risk/status' + tParam).then(res => res.json()),
+      fetch('/api/engine/version' + tParam).then(res => res.json())
     ]).then(([portfolio, perf, risk, engine]) => {
       setStatusData({
         totalCapital: portfolio?.totalCapital || 0,

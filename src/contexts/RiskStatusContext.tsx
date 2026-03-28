@@ -33,7 +33,7 @@ export function RiskStatusProvider({ children }: { children: ReactNode }) {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/risk/status');
+      const res = await fetch(`/api/risk/status?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         setStatus(await res.json());
       }
