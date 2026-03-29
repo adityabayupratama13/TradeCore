@@ -89,9 +89,9 @@ export default function HistoryPage() {
                       </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold w-32">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-sans font-bold tracking-wider border border-transparent ${
-                            t.engineVersion === 'v5' ? 'bg-[#ef4444]/15 text-[#ef4444]' : t.engineVersion === 'v4' ? 'bg-[#f59e0b]/15 text-[#f59e0b]' : t.engineVersion === 'v3' ? 'bg-[#10b981]/15 text-[#10b981]' : t.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
+                            t.engineVersion === 'v6' ? 'bg-[#00D4AA]/15 text-[#00D4AA]' : t.engineVersion === 'v5' ? 'bg-[#ef4444]/15 text-[#ef4444]' : t.engineVersion === 'v4' ? 'bg-[#f59e0b]/15 text-[#f59e0b]' : t.engineVersion === 'v3' ? 'bg-[#10b981]/15 text-[#10b981]' : t.engineVersion === 'v2' ? 'bg-[#a855f7]/15 text-[#a855f7]' : 'bg-[#3b82f6]/15 text-[#3b82f6]'
                           }`}>
-                            {t.engineVersion === 'v5' ? '🌎 V5' : t.engineVersion === 'v4' ? '⚡ V4' : t.engineVersion === 'v3' ? '🎯 V3' : t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
+                            {t.engineVersion === 'v6' ? '🕸️ V6' : t.engineVersion === 'v5' ? '🌎 V5' : t.engineVersion === 'v4' ? '⚡ V4' : t.engineVersion === 'v3' ? '🎯 V3' : t.engineVersion === 'v2' ? '🚀 V2' : '⚡ V1'}
                           </span>
                         </td>
                       <td className="p-4">

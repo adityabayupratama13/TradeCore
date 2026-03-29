@@ -34,7 +34,7 @@ export async function sendTelegramAlert(message: TelegramMessage): Promise<boole
     // Ambil info engine saat ini
     const evSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
     const evStr = (evSetting?.value || 'v1').toUpperCase();
-    const evBadge = evStr === 'V5' ? '🌎 V5' : evStr === 'V4' ? '⚡ V4' : evStr === 'V3' ? '🎯 V3' : evStr === 'V2' ? '🚀 V2' : '⚡ V1';
+    const evBadge = evStr === 'V6' ? '🔲 V6' : evStr === 'V5' ? '🌎 V5' : evStr === 'V4' ? '⚡ V4' : evStr === 'V3' ? '🎯 V3' : evStr === 'V2' ? '🚀 V2' : '⚡ V1';
 
     switch (message.type) {
       case 'TEST':
@@ -568,6 +568,9 @@ export async function startTelegramListener() {
                        '/logs [N] — N engine logs terbaru (default 5)',
                        '/block — Coin yang diblacklist hari ini',
                        '',
+                       '🔲 GRID BOT (V6)',
+                       '/grid — Status Grid & Profit',
+                       '',
                        '⚙️ ENGINE CONTROL',
                        '/start — Nyalakan engine',
                        '/stop — Matikan engine (emergency)',
@@ -583,6 +586,32 @@ export async function startTelegramListener() {
                        '/close_all — Close SEMUA posisi'
                      ].join('\n');
                      await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: helpText } } as any);
+                  } else if (cmd === '/grid') {
+                     try {
+                        const { getGridStatus } = require('./gridEngine');
+                        const status = await getGridStatus();
+                        if (!status.isActive) {
+                           await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '🔲 V6 Grid Bot is currently inactive. Switch to V6 and Start Engine.' } } as any);
+                        } else {
+                           const msg = [
+                              '🔲 V6 SMART GRID BOT',
+                              '━━━━━━━━━━━━━━',
+                              `📊 Pair: ${status.symbol}`,
+                              `⚡ Leverage: ${status.leverage}x`,
+                              `📏 Range: $${status.lowerBound.toFixed(2)} — $${status.upperBound.toFixed(2)}`,
+                              `📦 Grid: ${status.gridCount} / side (${status.gridSpacingPct}%)`,
+                              '━━━━━━━━━━━━━━',
+                              `📈 Active Levels: ${status.activeLevels} / ${status.totalLevels}`,
+                              `✅ Total Fills: ${status.totalFills}`,
+                              `💰 Gross Profit: +$${status.totalProfit.toFixed(2)}`,
+                              '━━━━━━━━━━━━━━',
+                              `⏱️ Runtime: ${status.runtime}`,
+                           ].join('\n');
+                           await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: msg } } as any);
+                        }
+                     } catch(e) {
+                        await sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: '🔲 Grid Status Error' } } as any);
+                     }
                   }
 
                }

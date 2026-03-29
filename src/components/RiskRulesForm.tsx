@@ -21,7 +21,7 @@ export function RiskRulesForm() {
   const [showDegenModal, setShowDegenModal] = useState(false);
   const [degenInput, setDegenInput] = useState("");
   
-  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'|'v5'>('v1');
+  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'|'v5'|'v6'>('v1');
   const [isEngineSaving, setIsEngineSaving] = useState(false);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function RiskRulesForm() {
     }
   };
 
-  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4'|'v5') => {
+  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4'|'v5'|'v6') => {
     if (ver === engineVer) return;
     setIsEngineSaving(true);
     try {
@@ -111,7 +111,7 @@ export function RiskRulesForm() {
       });
       if (res.ok) {
         setEngineVer(ver);
-        const label = ver === 'v5' ? 'V5 Macro Day-Trader' : ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
+        const label = ver === 'v6' ? 'V6 Smart Grid Bot' : ver === 'v5' ? 'V5 Macro Day-Trader' : ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
         showToastMsg(`✅ Engine → ${label} (preset applied)`, 'success');
         // Reload risk rules so Custom Override panel shows new preset values
         try {
@@ -497,7 +497,31 @@ export function RiskRulesForm() {
                     <p className="text-xs text-gray-500">Integrasi Geopolitik, Kalender Rilis Makro & Siklus Institusi. AI murni sebagai eksekutor SMC Sniper TF 1H. Sangat Santai.</p>
                   </div>
                 </div>
-                <div className="flex gap-3 items-center">
+
+                {/* V6 GRID BOT */}
+                <div 
+                  onClick={() => changeEngine('v6')}
+                  className={`mt-4 p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 ${
+                    engineVer === 'v6' ? 'border-[#10b981] bg-[#10b981]/10 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-gray-800 hover:border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🔲</span>
+                      <span className={`font-bold ${
+                        engineVer === 'v6' ? 'bg-gradient-to-r from-[#10b981] to-[#059669] text-transparent bg-clip-text' : 'text-gray-300'
+                      }`}>V6 Smart Grid Bot</span>
+                    </div>
+                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      engineVer === 'v6' ? 'bg-gradient-to-r from-[#10b981] to-[#059669] text-white' : 'text-gray-400 hover:text-white'
+                    }`}>
+                      NO AI
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">Murni matematis dari volatilitas market. Bot akan menempatkan Limit Orders di 8 level atas dan bawah, mengambil profit dari pantulan harga kecil apa pun arah market.</p>
+                </div>
+
+                <div className="flex gap-3 items-center mt-6">
                   <input
                     type="number" min={0} step={10}
                     value={simulatedCapital}

@@ -130,6 +130,26 @@ const ENGINE_PRESETS: Record<string, {
     maxDailyLossPct: 10,
     maxWeeklyLossPct: 50,
   },
+
+  // ─────────────────────────────────────────
+  // V6: Smart Grid Bot — No AI, pure volatility harvesting
+  // ─────────────────────────────────────────
+  v6: {
+    riskPctLargeCap: 2.0,
+    riskPctMidCap: 2.0,
+    riskPctLowCap: 2.0,
+    leverageLargeCap: 5,
+    leverageMidCap: 5,
+    leverageLowCap: 5,
+    maxLeverageLarge: 5,
+    maxLeverageMid: 5,
+    maxLeverageLow: 5,
+    minConfidence: 0,       // No AI used
+    minProfitTargetPct: 0,
+    maxOpenPositions: 16,   // Grid levels
+    maxDailyLossPct: 15,
+    maxWeeklyLossPct: 50,
+  },
 };
 
 export async function GET() {
@@ -145,8 +165,8 @@ export async function POST(req: Request) {
   try {
     const { version, applyPreset = true } = await req.json();
     
-    if (!['v1', 'v2', 'v3', 'v4', 'v5'].includes(version)) {
-      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1-v5' }, { status: 400 });
+    if (!['v1', 'v2', 'v3', 'v4', 'v5', 'v6'].includes(version)) {
+      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1-v6' }, { status: 400 });
     }
 
     // Save engine version

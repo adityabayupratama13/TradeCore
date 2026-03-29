@@ -4,6 +4,7 @@ import { runPriceWatcher } from './priceWatcher';
 import { prisma } from '../../lib/prisma';
 import { startTelegramListener, sendTelegramAlert } from './telegram';
 import { runDynamicHunter } from './pairSelector';
+import { runGridCycle, initializeGrid, stopGrid, getGridStatus } from './gridEngine';
 
 const globalAny = global as any;
 
@@ -11,21 +12,35 @@ globalAny.priceWatcherTimer = globalAny.priceWatcherTimer || null;
 globalAny.positionManagerTimer = globalAny.positionManagerTimer || null;
 globalAny.healthTimer = globalAny.healthTimer || null;
 globalAny.hunterTimer = globalAny.hunterTimer || null;
+globalAny.gridTimer = globalAny.gridTimer || null;
 globalAny.isRunning = globalAny.isRunning || false;
 
 
-export function startEngine(): void {
+export async function startEngine(): Promise<void> {
   if (globalAny.isRunning) return;
   globalAny.isRunning = true;
   
-  startPriceWatcherLoop();
-  startPositionManagerLoop();
-  startDynamicHunterLoop();
-  
-  console.log('🤖 TradeCore Engine STARTED');
-  console.log('👁️  Price Watcher: every 60 seconds');
-  console.log('📊 Position Manager: every 5 minutes');
-  console.log('🦅 Dynamic Hunter: every 1 hour');
+  // Check if V6 Grid mode is active
+  const verSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+  const engineVersion = verSetting?.value || 'v1';
+
+  if (engineVersion === 'v6') {
+    // V6: Start Grid Bot instead of price watcher
+    await startGridBotLoop();
+    startPositionManagerLoop();
+    console.log('🔲 TradeCore V6 GRID BOT STARTED');
+    console.log('🔲 Grid Cycle: every 30 seconds');
+    console.log('📊 Position Manager: every 5 minutes');
+  } else {
+    // V1–V5: Traditional AI-based engine
+    startPriceWatcherLoop();
+    startPositionManagerLoop();
+    startDynamicHunterLoop();
+    console.log('🤖 TradeCore Engine STARTED');
+    console.log('👁️  Price Watcher: every 60 seconds');
+    console.log('📊 Position Manager: every 5 minutes');
+    console.log('🦅 Dynamic Hunter: every 1 hour');
+  }
 }
 
 function startPriceWatcherLoop(): void {
@@ -59,11 +74,20 @@ function startPositionManagerLoop(): void {
   run();
 }
 
-export function stopEngine(): void {
+export async function stopEngine(): Promise<void> {
   if (globalAny.priceWatcherTimer) clearTimeout(globalAny.priceWatcherTimer);
   if (globalAny.positionManagerTimer) clearTimeout(globalAny.positionManagerTimer);
   if (globalAny.hunterTimer) clearTimeout(globalAny.hunterTimer);
+  if (globalAny.gridTimer) clearTimeout(globalAny.gridTimer);
   globalAny.isRunning = false;
+
+  // If V6 grid is active, stop it cleanly
+  const verSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+  if (verSetting?.value === 'v6') {
+    try {
+      await stopGrid();
+    } catch (_) {}
+  }
   
   prisma.appSettings.upsert({
     where: { key: 'engine_status' },
@@ -92,6 +116,40 @@ function startDynamicHunterLoop(): void {
     }
   }
   run() // run immediately on engine start
+}
+
+// ─────────────────────────────────────────────────────────────
+// V6: GRID BOT LOOP
+// ─────────────────────────────────────────────────────────────
+
+async function startGridBotLoop(): Promise<void> {
+  // Initialize grid if not already active
+  const gridStatus = await getGridStatus();
+  if (!gridStatus.isActive) {
+    try {
+      await initializeGrid({
+        symbol: 'ETHUSDT',   // ETH has good volatility for grids
+        leverage: 20,        // Boosted to 20x to ensure $20 minimum notional per order on small accounts
+        gridCount: 6,        // 6 levels per side = 12 total
+        gridSpacingPct: 0.3, // 0.3% gap between levels
+        capitalPct: 85       // Use 85% of available balance
+      });
+    } catch (err: any) {
+      console.error('❌ [GRID] Failed to initialize:', err.message);
+      return;
+    }
+  }
+
+  const run = async () => {
+    try {
+      await runGridCycle();
+    } catch (err) {
+      console.error('GridCycle error:', err);
+    } finally {
+      if (globalAny.isRunning) globalAny.gridTimer = setTimeout(run, 30_000); // 30 seconds
+    }
+  };
+  run();
 }
 
 export function getEngineStatus() {
