@@ -566,7 +566,7 @@ export function RiskRulesForm() {
                       NO AI
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500">15x leverage · 12 grids · 0.25% spacing. Dirancang untuk <span className="text-purple-400/80">weekend & sideways sempit</span> — fill lebih sering dengan spacing lebih rapat. Tanpa SL, tanpa circuit breaker.</p>
+                  <p className="text-xs text-gray-500">20x leverage · 12 grids · 0.3% spacing (V6-proven). Rentang lebih lebar dengan <span className="text-purple-400/80">Soft Expand</span> — spacing sama kayak V6, tanpa circuit breaker, tanpa SL.</p>
                 </div>
 
                 <div className="flex gap-3 items-center mt-6">

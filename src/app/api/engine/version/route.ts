@@ -173,19 +173,19 @@ const ENGINE_PRESETS: Record<string, {
   },
 
   // ─────────────────────────────────────────
-  // V8: Weekend / Tight Range Grid — 15x, 12 grids, 0.25% spacing
-  // High-frequency fills, short sideways range, low-volatility mode
+  // V8: V6 DNA + 20x + Soft Expand — 0.3% spacing, 12 grids/side
+  // Wider range, proven V6 spacing, no circuit breaker
   // ─────────────────────────────────────────
   v8: {
     riskPctLargeCap: 2.0,
     riskPctMidCap: 2.0,
     riskPctLowCap: 2.0,
-    leverageLargeCap: 15,
-    leverageMidCap: 15,
-    leverageLowCap: 15,
-    maxLeverageLarge: 15,
-    maxLeverageMid: 15,
-    maxLeverageLow: 15,
+    leverageLargeCap: 20,
+    leverageMidCap: 20,
+    leverageLowCap: 20,
+    maxLeverageLarge: 20,
+    maxLeverageMid: 20,
+    maxLeverageLow: 20,
     minConfidence: 0,
     minProfitTargetPct: 0,
     maxOpenPositions: 48,   // Up to 48 levels (12×2 sides + Soft Expand)

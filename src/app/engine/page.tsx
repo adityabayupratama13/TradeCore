@@ -25,7 +25,7 @@ export default function EngineDashboard() {
   const [v8Status, setV8Status]           = useState<any>(null);
   const [v8ActionLoading, setV8ActionLoading] = useState(false);
   const [v8Config, setV8Config]           = useState({
-    symbol: 'ETHUSDT', leverage: 15, gridCount: 12, gridSpacingPct: 0.25, capitalPct: 85
+    symbol: 'ETHUSDT', leverage: 20, gridCount: 12, gridSpacingPct: 0.3, capitalPct: 80
   });
   const [showV8Config, setShowV8Config]   = useState(false);
 
@@ -904,10 +904,10 @@ export default function EngineDashboard() {
           <div>
             <h2 className="font-bold flex items-center gap-2 text-purple-400 text-lg">
               <Grid className="w-5 h-5" />
-              V8 Weekend Grid Bot
-              <span className="text-xs font-normal text-gray-500 ml-1">— 15x | 12 grids | 0.25% spacing</span>
+              V8 Smart Grid Bot
+              <span className="text-xs font-normal text-gray-500 ml-1">— 20x | 12 grids | 0.3% spacing</span>
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5">High-frequency mode · Tight range · Weekend sideways · No auto-close</p>
+            <p className="text-xs text-gray-500 mt-0.5">V6-proven 0.3% spacing · 20x leverage · Wider range · Soft Expand · No CB</p>
           </div>
           <div className="flex items-center gap-3">
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${
@@ -1033,8 +1033,8 @@ export default function EngineDashboard() {
         {!v8Status?.isActive && !showV8Config && (
           <div className="p-8 text-center text-gray-600">
             <Grid className="w-10 h-10 mx-auto mb-2 opacity-20" />
-            <p>V8 Weekend Grid Bot is idle. Click <span className="text-purple-400">START V8</span> to launch.</p>
-            <p className="text-xs mt-1 text-gray-700">Default: ETHUSDT · 15x · 12 grids · 0.25% · 85% capital</p>
+            <p>V8 Smart Grid Bot is idle. Click <span className="text-purple-400">START V8</span> to launch.</p>
+            <p className="text-xs mt-1 text-gray-700">Default: ETHUSDT · 20x · 12 grids · 0.3% · 80% capital</p>
           </div>
         )}
       </div>

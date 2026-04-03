@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
-// V8 SMART GRID BOT ENGINE — "Weekend / Tight Range Mode"
-// Config: 15x leverage, 12 grids per side, 0.25% spacing
-// Designed for low-volatility / weekend markets with short sideways range
+// V8 SMART GRID BOT ENGINE — "V6 DNA + 20x + Soft Expand"
+// Config: 20x leverage, 12 grids/side, 0.3% spacing (same as V6)
+// Designed for wider range coverage with V6-proven spacing
 // NO circuit breaker — NO auto-close — NO stop loss
-// Range escape handled via Soft Expand (adds levels, never closes positions)
+// Range escape handled via Soft Expand (0.5% threshold)
 // ═══════════════════════════════════════════════════════════════
 
 import { prisma } from '../../lib/prisma';
@@ -62,13 +62,13 @@ interface GridConfigV8 {
 
 const GRID_STATE_KEY_V8 = 'grid_v8_state';
 const DEFAULT_SYMBOL      = 'ETHUSDT';
-const DEFAULT_LEVERAGE    = 15;     // Keep at 15x — safer for tight-spacing
-const DEFAULT_GRID_COUNT  = 12;     // 12 levels per side (24 total) — more fill chances
-const DEFAULT_SPACING_PCT = 0.25;   // 0.25% — narrower for tight sideways range
-const DEFAULT_CAPITAL_PCT = 85;     // 85% of available balance
-const MAX_EXPAND_COUNT    = 5;      // Alert user after 5 expands
-const EXPAND_LEVELS       = 3;      // Add 3 levels per soft expand
-const ESCAPE_THRESHOLD    = 0.5;    // Trigger soft expand at 0.5% beyond edge (tighter than V7)
+const DEFAULT_LEVERAGE    = 20;     // 20x — V6 DNA + leverage upgrade
+const DEFAULT_GRID_COUNT  = 12;     // 12 levels per side (24 total) — wider range
+const DEFAULT_SPACING_PCT = 0.3;    // 0.3% — sama kayak V6 yang terbukti cuan
+const DEFAULT_CAPITAL_PCT = 80;     // 80% — sama kayak V6
+const MAX_EXPAND_COUNT    = 5;      // Alert user setelah 5 expands
+const EXPAND_LEVELS       = 3;      // Tambah 3 levels per soft expand
+const ESCAPE_THRESHOLD    = 0.5;    // Soft expand di 0.5% luar edge (responsif)
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 

@@ -200,7 +200,7 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
                                 : statusData.engineVersion === 'v2' ? 'rgba(168, 85, 247, 0.15)'
                                 : 'rgba(59, 130, 246, 0.15)',
                }}>
-            {statusData.engineVersion === 'v8' ? '🟦 V8 (WEEKEND)'
+            {statusData.engineVersion === 'v8' ? '🟦 V8 (20x · 0.3%)'
            : statusData.engineVersion === 'v7' ? '🔷 V7 (GRID)'
            : statusData.engineVersion === 'v6' ? 'V6 (GRID)'
            : statusData.engineVersion === 'v5' ? 'V5 (MACRO DAY)'
