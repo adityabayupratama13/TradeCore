@@ -30,7 +30,7 @@ export async function startEngine(): Promise<void> {
   const engineVersion = verSetting?.value || 'v1';
 
   if (engineVersion === 'v6') {
-    // V6: Start Grid Bot instead of price watcher
+    // V6: Start Grid Bot
     await startGridBotLoop();
     startPositionManagerLoop();
     console.log('🔲 TradeCore V6 GRID BOT STARTED');
@@ -38,10 +38,9 @@ export async function startEngine(): Promise<void> {
     console.log('📊 Position Manager: every 5 minutes');
 
   } else if (engineVersion === 'v7') {
-    // V7: Start optimized grid bot (15x, 8 grids, 0.5%, Soft Expand)
+    // V7: 15x, 8 grids, 0.5% spacing — Soft Expand mode
     const v7Status = await getGridStatusV7();
     if (!v7Status.isActive) {
-      // Auto-initialize V7 if not yet started
       try {
         const { initializeGridV7 } = await import('./gridEngineV7');
         await initializeGridV7();
@@ -60,6 +59,28 @@ export async function startEngine(): Promise<void> {
     console.log('🔷 Grid Cycle: every 30 seconds');
     console.log('📊 Position Manager: every 5 minutes');
 
+  } else if (engineVersion === 'v8') {
+    // V8: 15x, 12 grids, 0.25% spacing — Weekend / Tight Range mode
+    const v8Status = await getGridStatusV8();
+    if (!v8Status.isActive) {
+      try {
+        const { initializeGridV8 } = await import('./gridEngineV8');
+        await initializeGridV8();
+        await prisma.appSettings.upsert({
+          where:  { key: 'grid_v8_active' },
+          update: { value: 'true' },
+          create: { key: 'grid_v8_active', value: 'true' }
+        });
+      } catch (err: any) {
+        console.error('❌ [V8] Auto-init failed:', err.message);
+      }
+    }
+    startGridV8Loop();
+    startPositionManagerLoop();
+    console.log('🟦 TradeCore V8 GRID BOT STARTED (Weekend Mode)');
+    console.log('🟦 Grid Cycle: every 30 seconds');
+    console.log('📊 Position Manager: every 5 minutes');
+
   } else {
     // V1–V5: Traditional AI-based engine
     startPriceWatcherLoop();
@@ -71,23 +92,8 @@ export async function startEngine(): Promise<void> {
     console.log('🦅 Dynamic Hunter: every 1 hour');
   }
 
-  // V7 loop auto-resume if V7 state is active (regardless of engine version setting)
-  if (engineVersion !== 'v7') {
-    const v7Status2 = await getGridStatusV7();
-    if (v7Status2.isActive) {
-      startGridV7Loop();
-      console.log('🔷 V7 Grid Bot loop resumed (independent)');
-    }
-  }
-
-  // V8 loop auto-resume if V8 state is active
-  if (engineVersion !== 'v8') {
-    const v8Status = await getGridStatusV8();
-    if (v8Status.isActive) {
-      startGridV8Loop();
-      console.log('🟦 V8 Grid Bot loop resumed (independent)');
-    }
-  }
+  // NOTE: V7/V8 do NOT auto-resume here — they only run when their engine version is set
+  // or explicitly started via /api/engine/grid-v7/start or /api/engine/grid-v8/start
 } // ← end startEngine
 
 function startPriceWatcherLoop(): void {
@@ -123,19 +129,48 @@ function startPositionManagerLoop(): void {
 }
 
 export async function stopEngine(): Promise<void> {
-  if (globalAny.priceWatcherTimer) clearTimeout(globalAny.priceWatcherTimer);
+  // Stop all timers
+  if (globalAny.priceWatcherTimer)  clearTimeout(globalAny.priceWatcherTimer);
   if (globalAny.positionManagerTimer) clearTimeout(globalAny.positionManagerTimer);
-  if (globalAny.hunterTimer) clearTimeout(globalAny.hunterTimer);
-  // Note: V7 timer is NOT stopped here — V7 is independent and managed via its own API
-  if (globalAny.gridTimer) clearTimeout(globalAny.gridTimer);
+  if (globalAny.hunterTimer)        clearTimeout(globalAny.hunterTimer);
+  if (globalAny.gridTimer)          clearTimeout(globalAny.gridTimer);
+  // Also stop V7 and V8 loops
+  stopGridV7Loop();
+  stopGridV8Loop();
   globalAny.isRunning = false;
 
-  // If V6 grid is active, stop it cleanly
   const verSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
-  if (verSetting?.value === 'v6') {
+  const engineVersion = verSetting?.value || 'v1';
+
+  // Close grid positions based on which engine is active
+  if (engineVersion === 'v6') {
+    try { await stopGrid(); } catch (_) {}
+  } else if (engineVersion === 'v7') {
+    // Stop V7 grid cleanly — cancel orders + close positions
     try {
-      await stopGrid();
-    } catch (_) {}
+      const { stopGridV7 } = await import('./gridEngineV7');
+      await stopGridV7();
+      await prisma.appSettings.upsert({
+        where:  { key: 'grid_v7_active' },
+        update: { value: 'false' },
+        create: { key: 'grid_v7_active', value: 'false' }
+      });
+    } catch (err: any) {
+      console.warn('[stopEngine] V7 stop error:', err.message);
+    }
+  } else if (engineVersion === 'v8') {
+    // Stop V8 grid cleanly — cancel orders + close positions
+    try {
+      const { stopGridV8 } = await import('./gridEngineV8');
+      await stopGridV8();
+      await prisma.appSettings.upsert({
+        where:  { key: 'grid_v8_active' },
+        update: { value: 'false' },
+        create: { key: 'grid_v8_active', value: 'false' }
+      });
+    } catch (err: any) {
+      console.warn('[stopEngine] V8 stop error:', err.message);
+    }
   }
   
   prisma.appSettings.upsert({
@@ -145,7 +180,6 @@ export async function stopEngine(): Promise<void> {
   }).catch(console.error);
 
   sendTelegramAlert({ type: 'RAW_MESSAGE', data: { text: "🛑 ENGINE STOPPED\nManual stop atau emergency stop aktif.\nCek System Logs untuk detail." } } as any).catch(console.error);
-
 
   console.log('🛑 TradeCore Engine STOPPED');
 }
