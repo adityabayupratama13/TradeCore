@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Play, Square, Activity, AlertCircle, Clock, Zap, Target, History, RefreshCcw } from 'lucide-react';
+import { Play, Square, Activity, AlertCircle, Clock, Zap, Target, History, RefreshCcw, Grid } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
 export default function EngineDashboard() {
@@ -12,6 +12,14 @@ export default function EngineDashboard() {
   const [hunterActive, setHunterActive] = useState<any[]>([]);
   const [hunterScanning, setHunterScanning] = useState(false);
   const [emergencyLocked, setEmergencyLocked] = useState(false);
+
+  // ── V7 Grid State ──
+  const [v7Status, setV7Status]           = useState<any>(null);
+  const [v7ActionLoading, setV7ActionLoading] = useState(false);
+  const [v7Config, setV7Config]           = useState({
+    symbol: 'ETHUSDT', leverage: 15, gridCount: 8, gridSpacingPct: 0.5, capitalPct: 85
+  });
+  const [showV7Config, setShowV7Config]   = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -43,12 +51,63 @@ export default function EngineDashboard() {
   useEffect(() => {
     fetchStatus();
     fetchHunter();
+    fetchV7Status();
     const interval = setInterval(() => {
       fetchStatus();
       fetchHunter();
+      fetchV7Status();
     }, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchV7Status = async () => {
+    try {
+      const res  = await fetch('/api/engine/grid-v7/status');
+      const data = await res.json();
+      setV7Status(data);
+    } catch (_) {}
+  };
+
+  const handleV7Start = async () => {
+    setV7ActionLoading(true);
+    try {
+      const res = await fetch('/api/engine/grid-v7/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(v7Config)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ V7 Grid Bot started!\n${data.config.symbol} | ${data.config.leverage}x | ${data.config.spacing} | Range: ${data.config.range}`);
+        await fetchV7Status();
+      } else {
+        alert(`❌ ${data.error}`);
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setV7ActionLoading(false);
+    }
+  };
+
+  const handleV7Stop = async () => {
+    if (!confirm('Stop V7 Grid Bot? This will close all open positions.')) return;
+    setV7ActionLoading(true);
+    try {
+      const res  = await fetch('/api/engine/grid-v7/stop', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`🛑 V7 stopped.\nTotal Profit: $${data.totalProfit?.toFixed(2)} | Fills: ${data.totalFills}`);
+        await fetchV7Status();
+      } else {
+        alert(`❌ ${data.error}`);
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setV7ActionLoading(false);
+    }
+  };
 
   const handleScanNow = async () => {
     setHunterScanning(true);
@@ -625,6 +684,158 @@ export default function EngineDashboard() {
         </div>
 
       </div>
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/* V7 SMART GRID BOT PANEL                                */}
+      {/* ═══════════════════════════════════════════════════════ */}
+      <div className="bg-[#0D1117] border border-blue-500/30 rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="p-4 border-b border-blue-500/20 flex justify-between items-center bg-gradient-to-r from-blue-900/20 to-transparent">
+          <div>
+            <h2 className="font-bold flex items-center gap-2 text-blue-400 text-lg">
+              <Grid className="w-5 h-5" />
+              V7 Smart Grid Bot
+              <span className="text-xs font-normal text-gray-500 ml-1">— 15x | 8 grids | 0.5% spacing</span>
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">Soft Expand mode · No auto-close · No SL · No circuit breaker</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Status badge */}
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${
+              v7Status?.isActive
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 animate-pulse'
+                : 'bg-gray-800 text-gray-500 border-gray-700'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${ v7Status?.isActive ? 'bg-blue-400' : 'bg-gray-600' }`} />
+              {v7Status?.isActive ? 'ACTIVE' : 'IDLE'}
+            </div>
+            {/* Start / Stop button */}
+            {v7Status?.isActive ? (
+              <button
+                onClick={handleV7Stop}
+                disabled={v7ActionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-all text-sm font-medium disabled:opacity-50"
+              >
+                <Square className="w-4 h-4" /> STOP V7
+              </button>
+            ) : (
+              <button
+                onClick={handleV7Start}
+                disabled={v7ActionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-all text-sm font-medium disabled:opacity-50"
+              >
+                <Play className="w-4 h-4" /> START V7
+              </button>
+            )}
+            {/* Config toggle */}
+            {!v7Status?.isActive && (
+              <button
+                onClick={() => setShowV7Config(!showV7Config)}
+                className="px-3 py-2 bg-gray-800 text-gray-400 border border-gray-700 rounded-lg hover:bg-gray-700 text-sm transition-all"
+              >
+                ⚙️ Config
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Config panel (only when idle) */}
+        {showV7Config && !v7Status?.isActive && (
+          <div className="p-4 border-b border-blue-500/10 bg-black/20">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Symbol</label>
+                <input value={v7Config.symbol} onChange={e => setV7Config({...v7Config, symbol: e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Leverage</label>
+                <input type="number" value={v7Config.leverage} onChange={e => setV7Config({...v7Config, leverage: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Grid Count</label>
+                <input type="number" value={v7Config.gridCount} onChange={e => setV7Config({...v7Config, gridCount: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Spacing %</label>
+                <input type="number" step="0.1" value={v7Config.gridSpacingPct} onChange={e => setV7Config({...v7Config, gridSpacingPct: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Capital %</label>
+                <input type="number" value={v7Config.capitalPct} onChange={e => setV7Config({...v7Config, capitalPct: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Live stats (only when active) */}
+        {v7Status?.isActive && (
+          <div className="p-4">
+            {/* Range bar */}
+            <div className="mb-4 bg-black/30 rounded-lg p-3 border border-gray-800">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Lower: <span className="text-blue-300 font-mono">${v7Status.lowerBound?.toFixed(2)}</span></span>
+                <span className="text-gray-400">⟵ Grid Range ⟶</span>
+                <span>Upper: <span className="text-blue-300 font-mono">${v7Status.upperBound?.toFixed(2)}</span></span>
+              </div>
+            </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="bg-[#151d2e] border border-blue-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Total Profit</div>
+                <div className={`text-xl font-bold ${ (v7Status.totalProfit||0) >= 0 ? 'text-blue-400' : 'text-red-400' }`}>
+                  ${(v7Status.totalProfit||0).toFixed(3)}
+                </div>
+              </div>
+              <div className="bg-[#151d2e] border border-blue-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Total Fills</div>
+                <div className="text-xl font-bold text-white">{v7Status.totalFills||0}</div>
+              </div>
+              <div className="bg-[#151d2e] border border-blue-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Active Orders</div>
+                <div className="text-xl font-bold text-green-400">{v7Status.activeLevels||0}</div>
+              </div>
+              <div className="bg-[#151d2e] border border-blue-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Filled Levels</div>
+                <div className="text-xl font-bold text-yellow-400">{v7Status.filledLevels||0}</div>
+              </div>
+              <div className="bg-[#151d2e] border border-blue-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Soft Expands</div>
+                <div className={`text-xl font-bold ${ (v7Status.expandCount||0) >= 5 ? 'text-red-400' : 'text-orange-400' }`}>
+                  {v7Status.expandCount||0}×
+                </div>
+              </div>
+              <div className="bg-[#151d2e] border border-blue-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Runtime</div>
+                <div className="text-sm font-bold text-gray-300">{v7Status.runtime||'—'}</div>
+              </div>
+            </div>
+
+            {/* Config summary */}
+            <div className="mt-3 flex gap-3 text-xs text-gray-500">
+              <span>📊 {v7Status.symbol}</span>
+              <span>⚡ {v7Status.leverage}x</span>
+              <span>📦 {v7Status.totalLevels} levels</span>
+              <span>📏 {v7Status.gridSpacingPct}% spacing</span>
+              <span>🕐 Last cycle: {v7Status.lastCycleAt ? formatDistanceToNow(new Date(v7Status.lastCycleAt), { addSuffix: true }) : '—'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Idle state */}
+        {!v7Status?.isActive && !showV7Config && (
+          <div className="p-8 text-center text-gray-600">
+            <Grid className="w-10 h-10 mx-auto mb-2 opacity-20" />
+            <p>V7 Grid Bot is idle. Click <span className="text-blue-400">START V7</span> to launch.</p>
+            <p className="text-xs mt-1 text-gray-700">Default: ETHUSDT · 15x · 8 grids · 0.5% · 85% capital</p>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

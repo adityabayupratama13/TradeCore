@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma';
 import { startTelegramListener, sendTelegramAlert } from './telegram';
 import { runDynamicHunter } from './pairSelector';
 import { runGridCycle, initializeGrid, stopGrid, getGridStatus } from './gridEngine';
+import { runGridCycleV7, getGridStatusV7 } from './gridEngineV7';
 
 const globalAny = global as any;
 
@@ -12,7 +13,8 @@ globalAny.priceWatcherTimer = globalAny.priceWatcherTimer || null;
 globalAny.positionManagerTimer = globalAny.positionManagerTimer || null;
 globalAny.healthTimer = globalAny.healthTimer || null;
 globalAny.hunterTimer = globalAny.hunterTimer || null;
-globalAny.gridTimer = globalAny.gridTimer || null;
+globalAny.gridTimer   = globalAny.gridTimer   || null;
+globalAny.gridV7Timer = globalAny.gridV7Timer || null;
 globalAny.isRunning = globalAny.isRunning || false;
 
 
@@ -40,6 +42,13 @@ export async function startEngine(): Promise<void> {
     console.log('👁️  Price Watcher: every 60 seconds');
     console.log('📊 Position Manager: every 5 minutes');
     console.log('🦅 Dynamic Hunter: every 1 hour');
+  }
+
+  // V7: Always start V7 loop if V7 grid is active (independent of engine version)
+  const v7Status = await getGridStatusV7();
+  if (v7Status.isActive) {
+    startGridV7Loop();
+    console.log('🔷 TradeCore V7 GRID BOT LOOP RESUMED');
   }
 }
 
@@ -78,6 +87,7 @@ export async function stopEngine(): Promise<void> {
   if (globalAny.priceWatcherTimer) clearTimeout(globalAny.priceWatcherTimer);
   if (globalAny.positionManagerTimer) clearTimeout(globalAny.positionManagerTimer);
   if (globalAny.hunterTimer) clearTimeout(globalAny.hunterTimer);
+  // Note: V7 timer is NOT stopped here — V7 is independent and managed via its own API
   if (globalAny.gridTimer) clearTimeout(globalAny.gridTimer);
   globalAny.isRunning = false;
 
@@ -150,6 +160,34 @@ async function startGridBotLoop(): Promise<void> {
     }
   };
   run();
+}
+
+// ─────────────────────────────────────────────────────────────
+// V7: INDEPENDENT GRID BOT LOOP
+// Started/stopped independently via /api/engine/grid-v7/start|stop
+// ─────────────────────────────────────────────────────────────
+
+export function startGridV7Loop(): void {
+  if (globalAny.gridV7Timer) return; // Already running
+  const run = async () => {
+    try {
+      await runGridCycleV7();
+    } catch (err) {
+      console.error('GridV7Cycle error:', err);
+    } finally {
+      globalAny.gridV7Timer = setTimeout(run, 30_000); // 30 seconds
+    }
+  };
+  run();
+  console.log('🔷 V7 Grid loop started');
+}
+
+export function stopGridV7Loop(): void {
+  if (globalAny.gridV7Timer) {
+    clearTimeout(globalAny.gridV7Timer);
+    globalAny.gridV7Timer = null;
+    console.log('🛑 V7 Grid loop stopped');
+  }
 }
 
 export function getEngineStatus() {
