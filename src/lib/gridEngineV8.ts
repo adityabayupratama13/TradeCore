@@ -124,14 +124,38 @@ export async function initializeGridV8(config: GridConfigV8 = {}): Promise<GridS
   const balances = await getBalance();
   const usdtBalance = balances.find((b: any) => b.asset === 'USDT');
   const availableCapital = (usdtBalance?.availableBalance || 0) * (capitalPct / 100);
-  const notionalPerGrid  = (availableCapital * leverage) / (gridCount * 2);
-  const qtyPerGrid       = notionalPerGrid / currentPrice;
+
+  // ── Enforce Binance minimum $20 notional per order ──
+  const MIN_NOTIONAL = 20; // Binance futures minimum
+  const totalNotional = availableCapital * leverage;
+  // Max orders we can place within minimum notional requirement
+  const maxOrders    = Math.floor(totalNotional / MIN_NOTIONAL);
+  const maxGridCount = Math.floor(maxOrders / 2); // per side
+
+  let effectiveGridCount = gridCount;
+  if (maxGridCount < gridCount) {
+    effectiveGridCount = Math.max(1, maxGridCount);
+    console.warn(`⚠️ [V8] Capital $${availableCapital.toFixed(2)} × ${leverage}x = $${totalNotional.toFixed(2)} notional`);
+    console.warn(`⚠️ [V8] Max grids per side: ${maxGridCount} (need $${MIN_NOTIONAL}/order). Reducing from ${gridCount} → ${effectiveGridCount}`);
+    if (effectiveGridCount < 2) {
+      throw new Error(
+        `V8 Grid: Insufficient capital. Need at least $${Math.ceil((MIN_NOTIONAL * 4) / leverage)} USDT for 2 grids/side. ` +
+        `Available: $${availableCapital.toFixed(2)}. Add capital or reduce leverage.`
+      );
+    }
+  }
+
+  const notionalPerGrid = totalNotional / (effectiveGridCount * 2);
+  const qtyPerGrid      = notionalPerGrid / currentPrice;
 
   const precision  = await getSymbolPrecision(symbol);
   const roundedQty = await roundQuantity(symbol, qtyPerGrid);
 
-  console.log(`💰 Capital: $${availableCapital.toFixed(2)} × ${leverage}x | Notional/grid: $${notionalPerGrid.toFixed(2)}`);
+  console.log(`💰 Capital: $${availableCapital.toFixed(2)} × ${leverage}x | Notional/grid: $${notionalPerGrid.toFixed(2)} (min $${MIN_NOTIONAL})`);
   console.log(`📦 Qty/grid: ${roundedQty} ${symbol.replace('USDT', '')} (~$${(roundedQty * currentPrice).toFixed(2)})`);
+  if (effectiveGridCount !== gridCount) {
+    console.log(`📐 Grid count adjusted: ${gridCount} → ${effectiveGridCount} per side`);
+  }
 
   if (roundedQty < precision.minQty) {
     throw new Error(
@@ -140,28 +164,41 @@ export async function initializeGridV8(config: GridConfigV8 = {}): Promise<GridS
     );
   }
 
+  // Use effectiveGridCount for the rest of the function
+  const finalGridCount = effectiveGridCount;
+
+
   // 4. Set leverage & margin type
   await setMarginType(symbol, 'ISOLATED');
   await setLeverage(symbol, leverage);
 
-  // 5. Build grid levels
+  // 5. Build grid levels (use finalGridCount — adjusted for min notional)
   const levels: GridLevel[] = [];
   const spacing = currentPrice * (gridSpacingPct / 100);
 
+  // Recalculate bounds using finalGridCount
+  const totalRangeActual = finalGridCount * gridSpacingPct;
+  const upperBoundActual = currentPrice * (1 + totalRangeActual / 100);
+  const lowerBoundActual = currentPrice * (1 - totalRangeActual / 100);
+
   // BUY levels below current price
-  for (let i = gridCount; i >= 1; i--) {
+  for (let i = finalGridCount; i >= 1; i--) {
     const price = await roundPrice(symbol, currentPrice - spacing * i);
-    levels.push({ index: gridCount - i, price, side: 'BUY', status: 'EMPTY' });
+    levels.push({ index: finalGridCount - i, price, side: 'BUY', status: 'EMPTY' });
   }
   // SELL levels above current price
-  for (let i = 1; i <= gridCount; i++) {
+  for (let i = 1; i <= finalGridCount; i++) {
     const price = await roundPrice(symbol, currentPrice + spacing * i);
-    levels.push({ index: gridCount + i - 1, price, side: 'SELL', status: 'EMPTY' });
+    levels.push({ index: finalGridCount + i - 1, price, side: 'SELL', status: 'EMPTY' });
   }
 
   const state: GridStateV8 = {
-    symbol, isActive: true, leverage, gridCount, gridSpacingPct,
-    basePrice: currentPrice, upperBound, lowerBound,
+    symbol, isActive: true, leverage,
+    gridCount: finalGridCount,  // store the effective grid count
+    gridSpacingPct,
+    basePrice:  currentPrice,
+    upperBound: upperBoundActual,
+    lowerBound: lowerBoundActual,
     qtyPerGrid: roundedQty, levels,
     totalProfit: 0, totalFills: 0, expandCount: 0,
     createdAt: new Date().toISOString(),
@@ -179,11 +216,14 @@ export async function initializeGridV8(config: GridConfigV8 = {}): Promise<GridS
   await saveGridStateV8(state);
 
   console.log(`✅ [GRID V8] Initialized: ${levels.length} levels, ${gridSpacingPct}% spacing, ${leverage}x leverage`);
+  if (finalGridCount !== gridCount) {
+    console.log(`📐 Grid reduced: ${gridCount} → ${finalGridCount}/side due to capital. Notional/grid: $${notionalPerGrid.toFixed(2)}`);
+  }
 
   await sendTelegramAlert({
     type: 'RAW_MESSAGE',
     data: {
-      text: `🟦 GRID V8 STARTED (Weekend Mode)\n━━━━━━━━━━━━━━\n📊 ${symbol} @ $${currentPrice.toFixed(2)}\n📏 Range: $${lowerBound.toFixed(2)} — $${upperBound.toFixed(2)}\n📦 ${levels.length} levels (${gridSpacingPct}% spacing)\n⚡ Leverage: ${leverage}x\n💰 Per grid: ~$${(roundedQty * currentPrice).toFixed(2)}\n━━━━━━━━━━━━━━\n🟦 V8: High-freq Soft Expand — NO auto-close`
+      text: `🟦 GRID V8 STARTED (Weekend Mode)\n━━━━━━━━━━━━━━\n📊 ${symbol} @ $${currentPrice.toFixed(2)}\n📏 Range: $${lowerBoundActual.toFixed(2)} — $${upperBoundActual.toFixed(2)}\n📦 ${levels.length} levels (${finalGridCount}/side, ${gridSpacingPct}% spacing)\n⚡ Leverage: ${leverage}x\n💰 Per grid: ~$${notionalPerGrid.toFixed(2)} (~${roundedQty} ETH)\n━━━━━━━━━━━━━━\n🟦 V8: High-freq Soft Expand — NO auto-close`
     }
   } as any);
 
@@ -474,7 +514,7 @@ export async function stopGridV8(): Promise<{ totalProfit: number; totalFills: n
         const portfolio = await prisma.portfolio.findFirst();
         await prisma.trade.create({
           data: {
-            portfolioId:   portfolio?.id || 1,
+            portfolioId:   String(portfolio?.id ?? 1),
             marketType:    'FUTURES',
             symbol:        state.symbol,
             direction:     closeSide === 'BUY' ? 'SHORT' : 'LONG',
@@ -486,7 +526,7 @@ export async function stopGridV8(): Promise<{ totalProfit: number; totalFills: n
             takeProfit:    0,
             status:        'CLOSED',
             engineVersion: 'v8',
-            pnl:           pos.unRealizedProfit || 0,
+            pnl:           pos.unrealizedProfit || 0,
             entryAt:       new Date(state.createdAt),
             exitAt:        new Date()
           }
