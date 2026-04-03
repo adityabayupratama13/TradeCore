@@ -18,11 +18,12 @@ globalAny.gridV7Timer = globalAny.gridV7Timer || null;
 globalAny.isRunning = globalAny.isRunning || false;
 
 
+
 export async function startEngine(): Promise<void> {
   if (globalAny.isRunning) return;
   globalAny.isRunning = true;
   
-  // Check if V6 Grid mode is active
+  // Check which engine version is active
   const verSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
   const engineVersion = verSetting?.value || 'v1';
 
@@ -33,6 +34,30 @@ export async function startEngine(): Promise<void> {
     console.log('🔲 TradeCore V6 GRID BOT STARTED');
     console.log('🔲 Grid Cycle: every 30 seconds');
     console.log('📊 Position Manager: every 5 minutes');
+
+  } else if (engineVersion === 'v7') {
+    // V7: Start optimized grid bot (15x, 8 grids, 0.5%, Soft Expand)
+    const v7Status = await getGridStatusV7();
+    if (!v7Status.isActive) {
+      // Auto-initialize V7 if not yet started
+      try {
+        const { initializeGridV7 } = await import('./gridEngineV7');
+        await initializeGridV7();
+        await prisma.appSettings.upsert({
+          where:  { key: 'grid_v7_active' },
+          update: { value: 'true' },
+          create: { key: 'grid_v7_active', value: 'true' }
+        });
+      } catch (err: any) {
+        console.error('❌ [V7] Auto-init failed:', err.message);
+      }
+    }
+    startGridV7Loop();
+    startPositionManagerLoop();
+    console.log('🔷 TradeCore V7 GRID BOT STARTED');
+    console.log('🔷 Grid Cycle: every 30 seconds');
+    console.log('📊 Position Manager: every 5 minutes');
+
   } else {
     // V1–V5: Traditional AI-based engine
     startPriceWatcherLoop();
@@ -44,13 +69,16 @@ export async function startEngine(): Promise<void> {
     console.log('🦅 Dynamic Hunter: every 1 hour');
   }
 
-  // V7: Always start V7 loop if V7 grid is active (independent of engine version)
-  const v7Status = await getGridStatusV7();
-  if (v7Status.isActive) {
-    startGridV7Loop();
-    console.log('🔷 TradeCore V7 GRID BOT LOOP RESUMED');
+  // V7 loop auto-resume if V7 state is active (regardless of engine version setting)
+  if (engineVersion !== 'v7') {
+    const v7Status2 = await getGridStatusV7();
+    if (v7Status2.isActive) {
+      startGridV7Loop();
+      console.log('🔷 V7 Grid Bot loop resumed (independent)');
+    }
   }
 }
+
 
 function startPriceWatcherLoop(): void {
   const run = async () => {
