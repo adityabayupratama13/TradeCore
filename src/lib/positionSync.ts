@@ -1,4 +1,4 @@
-import { getPositions, getOpenAlgoOrders, getOpenOrders, placeAlgoOrder, getUserTrades } from './binance';
+import { getPositions, getOpenAlgoOrders, getOpenOrders, placeAlgoOrder, getUserTrades, getBalance } from './binance';
 import { prisma } from '../../lib/prisma';
 import { sendTelegramAlert } from './telegram';
 import { getCoinCategory } from './coinCategories';
@@ -14,6 +14,26 @@ export async function syncPositions(): Promise<void> {
   isSyncing = true;
   try {
     lastSyncTime = Date.now();
+    
+    // --- SYNC PORTFOLIO BALANCE ---
+    // Update portfolio balance here instead of in trading engine so it still updates even if AI is blocked or locked
+    const balances = await getBalance();
+    const usdtBalance = balances.find((b: any) => b.asset === 'USDT');
+    const realWalletBalance = usdtBalance ? usdtBalance.balance : 0;
+    
+    const capitalOverrideSetting = await prisma.appSettings.findUnique({ where: { key: 'simulated_capital_usd' } });
+    const simulatedCapital = capitalOverrideSetting?.value ? parseFloat(capitalOverrideSetting.value) : 0;
+    const isCapitalOverride = simulatedCapital > 0;
+
+    let portfo = await prisma.portfolio.findFirst();
+    if (portfo && realWalletBalance > 0) {
+        await prisma.portfolio.update({
+            where: { id: portfo.id },
+            data: { totalCapital: isCapitalOverride ? simulatedCapital : realWalletBalance }
+        });
+    }
+    // ------------------------------
+
     const binancePositions = await getPositions();
     const dbTrades = await prisma.trade.findMany({ where: { status: 'OPEN' } });
 

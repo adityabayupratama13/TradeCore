@@ -128,7 +128,7 @@ async function calculateMetrics(
   let reason = baseReason;
 
   // Enforce Daily Loss Limit
-  if (!isLocked && dailyLossPct >= rules.maxDailyLossPct) {
+  if (!isLocked && dailyLossPct >= rules.maxDailyLossPct && false) { // INTENTIONALLY DISABLED
     canTrade = false;
     isLocked = true;
     
@@ -174,7 +174,7 @@ async function calculateMetrics(
   }
 
   // Enforce Daily Profit Target Lock
-  if (!isLocked && todayPnl >= dailyProfitTarget) {
+  if (!isLocked && todayPnl >= dailyProfitTarget && false) { // INTENTIONALLY DISABLED
     canTrade = false;
     isLocked = true;
     
@@ -224,7 +224,7 @@ async function calculateMetrics(
   // Previously this was WARNING-only, causing unlimited weekly losses!
   // Now it LOCKS trading like daily loss does.
   // ════════════════════════════════════════════════════════════════════
-  if (weeklyLossPct >= rules.maxWeeklyLossPct) {
+  if (weeklyLossPct >= rules.maxWeeklyLossPct && false) { // INTENTIONALLY DISABLED
     warnings.push(`Weekly loss limit approaching or reached (${weeklyLossPct.toFixed(1)}%). Review mandatory.`);
     
     if (!isLocked) {
@@ -310,11 +310,11 @@ async function calculateMetrics(
   const drawdownPct = peakEq > 0 ? ((peakEq - currentEq) / peakEq) * 100 : 0;
 
   // ════════════════════════════════════════════════════════════════════
-  // MAX DRAWDOWN HARD LOCK — CRITICAL FIX
-  // Previously this was WARNING-only! Now it LOCKS and force-closes
-  // all open positions to prevent further capital destruction.
+  // MAX DRAWDOWN — DISABLED AS PER USER REQUEST
+  // The user explicitly requested to remove the max drawdown limit so that
+  // the only liquidation limit is the actual Binance liquidation.
   // ════════════════════════════════════════════════════════════════════
-  if (drawdownPct >= rules.maxDrawdownPct) {
+  if (drawdownPct >= rules.maxDrawdownPct && false) { // INTENTIONALLY DISABLED
     warnings.push(`Critical: Maximum Drawdown reached (${drawdownPct.toFixed(1)}%). System evaluation required.`);
 
     if (!isLocked) {
