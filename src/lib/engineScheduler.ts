@@ -6,6 +6,7 @@ import { startTelegramListener, sendTelegramAlert } from './telegram';
 import { runDynamicHunter } from './pairSelector';
 import { runGridCycle, initializeGrid, stopGrid, getGridStatus } from './gridEngine';
 import { runGridCycleV7, getGridStatusV7 } from './gridEngineV7';
+import { runGridCycleV8, getGridStatusV8 } from './gridEngineV8';
 
 const globalAny = global as any;
 
@@ -15,6 +16,7 @@ globalAny.healthTimer = globalAny.healthTimer || null;
 globalAny.hunterTimer = globalAny.hunterTimer || null;
 globalAny.gridTimer   = globalAny.gridTimer   || null;
 globalAny.gridV7Timer = globalAny.gridV7Timer || null;
+globalAny.gridV8Timer = globalAny.gridV8Timer || null;
 globalAny.isRunning = globalAny.isRunning || false;
 
 
@@ -77,10 +79,19 @@ export async function startEngine(): Promise<void> {
       console.log('🔷 V7 Grid Bot loop resumed (independent)');
     }
   }
-}
 
+  // V8 loop auto-resume if V8 state is active
+  if (engineVersion !== 'v8') {
+    const v8Status = await getGridStatusV8();
+    if (v8Status.isActive) {
+      startGridV8Loop();
+      console.log('🟦 V8 Grid Bot loop resumed (independent)');
+    }
+  }
+} // ← end startEngine
 
 function startPriceWatcherLoop(): void {
+
   const run = async () => {
     try {
       await runPriceWatcher();
@@ -215,6 +226,33 @@ export function stopGridV7Loop(): void {
     clearTimeout(globalAny.gridV7Timer);
     globalAny.gridV7Timer = null;
     console.log('🛑 V7 Grid loop stopped');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// V8: INDEPENDENT GRID BOT LOOP — Weekend / Tight Range Mode
+// ─────────────────────────────────────────────────────────────
+
+export function startGridV8Loop(): void {
+  if (globalAny.gridV8Timer) return; // Already running
+  const run = async () => {
+    try {
+      await runGridCycleV8();
+    } catch (err) {
+      console.error('GridV8Cycle error:', err);
+    } finally {
+      globalAny.gridV8Timer = setTimeout(run, 30_000);
+    }
+  };
+  run();
+  console.log('🟦 V8 Grid loop started');
+}
+
+export function stopGridV8Loop(): void {
+  if (globalAny.gridV8Timer) {
+    clearTimeout(globalAny.gridV8Timer);
+    globalAny.gridV8Timer = null;
+    console.log('🛑 V8 Grid loop stopped');
   }
 }
 

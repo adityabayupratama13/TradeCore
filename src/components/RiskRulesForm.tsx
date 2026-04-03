@@ -21,7 +21,7 @@ export function RiskRulesForm() {
   const [showDegenModal, setShowDegenModal] = useState(false);
   const [degenInput, setDegenInput] = useState("");
   
-  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'|'v5'|'v6'|'v7'>('v1');
+  const [engineVer, setEngineVer] = useState<'v1'|'v2'|'v3'|'v4'|'v5'|'v6'|'v7'|'v8'>('v1');
   const [isEngineSaving, setIsEngineSaving] = useState(false);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function RiskRulesForm() {
     }
   };
 
-  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4'|'v5'|'v6'|'v7') => {
+  const changeEngine = async (ver: 'v1'|'v2'|'v3'|'v4'|'v5'|'v6'|'v7'|'v8') => {
     if (ver === engineVer) return;
     setIsEngineSaving(true);
     try {
@@ -111,7 +111,7 @@ export function RiskRulesForm() {
       });
       if (res.ok) {
         setEngineVer(ver);
-        const label = ver === 'v7' ? 'V7 Smart Grid Bot' : ver === 'v6' ? 'V6 Smart Grid Bot' : ver === 'v5' ? 'V5 Macro Day-Trader' : ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
+        const label = ver === 'v8' ? 'V8 Weekend Grid Bot' : ver === 'v7' ? 'V7 Smart Grid Bot' : ver === 'v6' ? 'V6 Smart Grid Bot' : ver === 'v5' ? 'V5 Macro Day-Trader' : ver === 'v4' ? 'V4 Smart Aggressive' : ver === 'v3' ? 'V3 Sniper' : ver === 'v2' ? 'V2 SMC' : 'V1 Classic';
         showToastMsg(`✅ Engine → ${label} (preset applied)`, 'success');
         // Reload risk rules so Custom Override panel shows new preset values
         try {
@@ -543,6 +543,30 @@ export function RiskRulesForm() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-500">15x leverage · 8 grids · 0.5% spacing. <span className="text-blue-400/80">Soft Expand</span> saat harga keluar range — tidak pernah close posisi otomatis. Tanpa SL, tanpa circuit breaker.</p>
+                </div>
+
+                {/* V8 WEEKEND GRID BOT */}
+                <div 
+                  onClick={() => changeEngine('v8')}
+                  className={`mt-3 p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 ${
+                    engineVer === 'v8' ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'border-gray-800 hover:border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🟦</span>
+                      <span className={`font-bold ${
+                        engineVer === 'v8' ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-transparent bg-clip-text' : 'text-gray-300'
+                      }`}>V8 Weekend Grid Bot</span>
+                      {engineVer === 'v8' && <span className="text-[10px] text-purple-300 bg-purple-900/50 px-1.5 py-0.5 rounded">WEEKEND</span>}
+                    </div>
+                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      engineVer === 'v8' ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white' : 'text-gray-400 hover:text-white'
+                    }`}>
+                      NO AI
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">15x leverage · 12 grids · 0.25% spacing. Dirancang untuk <span className="text-purple-400/80">weekend & sideways sempit</span> — fill lebih sering dengan spacing lebih rapat. Tanpa SL, tanpa circuit breaker.</p>
                 </div>
 
                 <div className="flex gap-3 items-center mt-6">

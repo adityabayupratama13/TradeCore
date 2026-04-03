@@ -152,7 +152,7 @@ const ENGINE_PRESETS: Record<string, {
   },
 
   // ─────────────────────────────────────────
-  // V7: Optimal Grid Bot — 15x, 8 grids, 0.5% spacing
+  // V8: Optimal Grid Bot — 15x, 8 grids, 0.5% spacing
   // Soft Expand mode, no circuit breaker, no SL, no auto-close
   // ─────────────────────────────────────────
   v7: {
@@ -171,6 +171,27 @@ const ENGINE_PRESETS: Record<string, {
     maxDailyLossPct: 999,   // No limit — bot never auto-cuts
     maxWeeklyLossPct: 999,
   },
+
+  // ─────────────────────────────────────────
+  // V8: Weekend / Tight Range Grid — 15x, 12 grids, 0.25% spacing
+  // High-frequency fills, short sideways range, low-volatility mode
+  // ─────────────────────────────────────────
+  v8: {
+    riskPctLargeCap: 2.0,
+    riskPctMidCap: 2.0,
+    riskPctLowCap: 2.0,
+    leverageLargeCap: 15,
+    leverageMidCap: 15,
+    leverageLowCap: 15,
+    maxLeverageLarge: 15,
+    maxLeverageMid: 15,
+    maxLeverageLow: 15,
+    minConfidence: 0,
+    minProfitTargetPct: 0,
+    maxOpenPositions: 48,   // Up to 48 levels (12×2 sides + Soft Expand)
+    maxDailyLossPct: 999,
+    maxWeeklyLossPct: 999,
+  },
 };
 
 export async function GET() {
@@ -186,8 +207,8 @@ export async function POST(req: Request) {
   try {
     const { version, applyPreset = true } = await req.json();
     
-    if (!['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7'].includes(version)) {
-      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1-v7' }, { status: 400 });
+    if (!['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8'].includes(version)) {
+      return NextResponse.json({ success: false, error: 'Invalid version. Must be v1-v8' }, { status: 400 });
     }
 
     // Save engine version

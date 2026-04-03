@@ -165,7 +165,7 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
 
         {/* Engine Version */}
         <div className="flex flex-col text-right cursor-pointer" onClick={async () => {
-          const cycle: Record<string, string> = { v1: 'v2', v2: 'v3', v3: 'v4', v4: 'v5', v5: 'v6', v6: 'v7', v7: 'v1' };
+          const cycle: Record<string, string> = { v1: 'v2', v2: 'v3', v3: 'v4', v4: 'v5', v5: 'v6', v6: 'v7', v7: 'v8', v8: 'v1' };
           const newV = cycle[statusData.engineVersion] || 'v1';
           setStatusData({...statusData, engineVersion: newV});
           await fetch('/api/engine/version', { 
@@ -178,17 +178,21 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
           <div className={`text-[10px] md:text-[11px] px-2 py-0.5 md:mt-0.5 rounded font-bold tracking-widest text-center hover:bg-opacity-40 transition-all border ${
             statusData.engineVersion === 'v7'
               ? 'border-blue-500/40 animate-pulse'
+              : statusData.engineVersion === 'v8'
+              ? 'border-purple-500/40 animate-pulse'
               : 'border-transparent'
           }`} 
                style={{ 
-                 color: statusData.engineVersion === 'v7' ? '#3b82f6'
+                 color: statusData.engineVersion === 'v8' ? '#8b5cf6'
+                      : statusData.engineVersion === 'v7' ? '#3b82f6'
                       : statusData.engineVersion === 'v6' ? '#059669'
                       : statusData.engineVersion === 'v5' ? '#ef4444'
                       : statusData.engineVersion === 'v4' ? '#f59e0b'
                       : statusData.engineVersion === 'v3' ? '#10b981'
                       : statusData.engineVersion === 'v2' ? '#a855f7'
                       : '#3b82f6', 
-                 backgroundColor: statusData.engineVersion === 'v7' ? 'rgba(59, 130, 246, 0.2)'
+                 backgroundColor: statusData.engineVersion === 'v8' ? 'rgba(139, 92, 246, 0.2)'
+                                : statusData.engineVersion === 'v7' ? 'rgba(59, 130, 246, 0.2)'
                                 : statusData.engineVersion === 'v6' ? 'rgba(5, 150, 105, 0.15)'
                                 : statusData.engineVersion === 'v5' ? 'rgba(239, 68, 68, 0.15)'
                                 : statusData.engineVersion === 'v4' ? 'rgba(245,158,11,0.15)'
@@ -196,7 +200,8 @@ export function TopBar({ onToggleSidebar, isCollapsed }: TopBarProps) {
                                 : statusData.engineVersion === 'v2' ? 'rgba(168, 85, 247, 0.15)'
                                 : 'rgba(59, 130, 246, 0.15)',
                }}>
-            {statusData.engineVersion === 'v7' ? '🔷 V7 (GRID)'
+            {statusData.engineVersion === 'v8' ? '🟦 V8 (WEEKEND)'
+           : statusData.engineVersion === 'v7' ? '🔷 V7 (GRID)'
            : statusData.engineVersion === 'v6' ? 'V6 (GRID)'
            : statusData.engineVersion === 'v5' ? 'V5 (MACRO DAY)'
            : statusData.engineVersion === 'v4' ? 'V4 (SMART)'

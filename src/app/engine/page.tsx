@@ -21,6 +21,14 @@ export default function EngineDashboard() {
   });
   const [showV7Config, setShowV7Config]   = useState(false);
 
+  // ── V8 Grid State ──
+  const [v8Status, setV8Status]           = useState<any>(null);
+  const [v8ActionLoading, setV8ActionLoading] = useState(false);
+  const [v8Config, setV8Config]           = useState({
+    symbol: 'ETHUSDT', leverage: 15, gridCount: 12, gridSpacingPct: 0.25, capitalPct: 85
+  });
+  const [showV8Config, setShowV8Config]   = useState(false);
+
   const fetchStatus = async () => {
     try {
       const res = await fetch('/api/engine/status');
@@ -52,10 +60,12 @@ export default function EngineDashboard() {
     fetchStatus();
     fetchHunter();
     fetchV7Status();
+    fetchV8Status();
     const interval = setInterval(() => {
       fetchStatus();
       fetchHunter();
       fetchV7Status();
+      fetchV8Status();
     }, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -106,6 +116,55 @@ export default function EngineDashboard() {
       alert(e.message);
     } finally {
       setV7ActionLoading(false);
+    }
+  };
+
+  const fetchV8Status = async () => {
+    try {
+      const res  = await fetch('/api/engine/grid-v8/status');
+      const data = await res.json();
+      setV8Status(data);
+    } catch (_) {}
+  };
+
+  const handleV8Start = async () => {
+    setV8ActionLoading(true);
+    try {
+      const res = await fetch('/api/engine/grid-v8/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(v8Config)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ V8 Weekend Grid Bot started!\n${data.config.symbol} | ${data.config.leverage}x | ${data.config.spacing} | Range: ${data.config.range}`);
+        await fetchV8Status();
+      } else {
+        alert(`❌ ${data.error}`);
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setV8ActionLoading(false);
+    }
+  };
+
+  const handleV8Stop = async () => {
+    if (!confirm('Stop V8 Grid Bot? This will close all open positions.')) return;
+    setV8ActionLoading(true);
+    try {
+      const res  = await fetch('/api/engine/grid-v8/stop', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`🛑 V8 stopped.\nTotal Profit: $${data.totalProfit?.toFixed(2)} | Fills: ${data.totalFills}`);
+        await fetchV8Status();
+      } else {
+        alert(`❌ ${data.error}`);
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setV8ActionLoading(false);
     }
   };
 
@@ -832,6 +891,150 @@ export default function EngineDashboard() {
             <Grid className="w-10 h-10 mx-auto mb-2 opacity-20" />
             <p>V7 Grid Bot is idle. Click <span className="text-blue-400">START V7</span> to launch.</p>
             <p className="text-xs mt-1 text-gray-700">Default: ETHUSDT · 15x · 8 grids · 0.5% · 85% capital</p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/* V8 WEEKEND GRID BOT PANEL                                */}
+      {/* ═══════════════════════════════════════════════════════ */}
+      <div className="bg-[#0D1117] border border-purple-500/30 rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="p-4 border-b border-purple-500/20 flex justify-between items-center bg-gradient-to-r from-purple-900/20 to-transparent">
+          <div>
+            <h2 className="font-bold flex items-center gap-2 text-purple-400 text-lg">
+              <Grid className="w-5 h-5" />
+              V8 Weekend Grid Bot
+              <span className="text-xs font-normal text-gray-500 ml-1">— 15x | 12 grids | 0.25% spacing</span>
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">High-frequency mode · Tight range · Weekend sideways · No auto-close</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${
+              v8Status?.isActive
+                ? 'bg-purple-500/20 text-purple-400 border-purple-500/40 animate-pulse'
+                : 'bg-gray-800 text-gray-500 border-gray-700'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${ v8Status?.isActive ? 'bg-purple-400' : 'bg-gray-600' }`} />
+              {v8Status?.isActive ? 'ACTIVE' : 'IDLE'}
+            </div>
+            {v8Status?.isActive ? (
+              <button
+                onClick={handleV8Stop}
+                disabled={v8ActionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-all text-sm font-medium disabled:opacity-50"
+              >
+                <Square className="w-4 h-4" /> STOP V8
+              </button>
+            ) : (
+              <button
+                onClick={handleV8Start}
+                disabled={v8ActionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/20 transition-all text-sm font-medium disabled:opacity-50"
+              >
+                <Play className="w-4 h-4" /> START V8
+              </button>
+            )}
+            {!v8Status?.isActive && (
+              <button
+                onClick={() => setShowV8Config(!showV8Config)}
+                className="px-3 py-2 bg-gray-800 text-gray-400 border border-gray-700 rounded-lg hover:bg-gray-700 text-sm transition-all"
+              >
+                ⚙️ Config
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Config panel */}
+        {showV8Config && !v8Status?.isActive && (
+          <div className="p-4 border-b border-purple-500/10 bg-black/20">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Symbol</label>
+                <input value={v8Config.symbol} onChange={e => setV8Config({...v8Config, symbol: e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Leverage</label>
+                <input type="number" value={v8Config.leverage} onChange={e => setV8Config({...v8Config, leverage: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Grid Count</label>
+                <input type="number" value={v8Config.gridCount} onChange={e => setV8Config({...v8Config, gridCount: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Spacing %</label>
+                <input type="number" step="0.05" value={v8Config.gridSpacingPct} onChange={e => setV8Config({...v8Config, gridSpacingPct: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Capital %</label>
+                <input type="number" value={v8Config.capitalPct} onChange={e => setV8Config({...v8Config, capitalPct: +e.target.value})}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Live stats */}
+        {v8Status?.isActive && (
+          <div className="p-4">
+            <div className="mb-4 bg-black/30 rounded-lg p-3 border border-gray-800">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Lower: <span className="text-purple-300 font-mono">${v8Status.lowerBound?.toFixed(2)}</span></span>
+                <span className="text-gray-400">⟵ Grid Range ⟶</span>
+                <span>Upper: <span className="text-purple-300 font-mono">${v8Status.upperBound?.toFixed(2)}</span></span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div className="bg-[#1a1528] border border-purple-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Total Profit</div>
+                <div className={`text-xl font-bold ${ (v8Status.totalProfit||0) >= 0 ? 'text-purple-400' : 'text-red-400' }`}>
+                  ${(v8Status.totalProfit||0).toFixed(3)}
+                </div>
+              </div>
+              <div className="bg-[#1a1528] border border-purple-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Total Fills</div>
+                <div className="text-xl font-bold text-white">{v8Status.totalFills||0}</div>
+              </div>
+              <div className="bg-[#1a1528] border border-purple-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Active Orders</div>
+                <div className="text-xl font-bold text-green-400">{v8Status.activeLevels||0}</div>
+              </div>
+              <div className="bg-[#1a1528] border border-purple-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Filled Levels</div>
+                <div className="text-xl font-bold text-yellow-400">{v8Status.filledLevels||0}</div>
+              </div>
+              <div className="bg-[#1a1528] border border-purple-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Soft Expands</div>
+                <div className={`text-xl font-bold ${ (v8Status.expandCount||0) >= 5 ? 'text-red-400' : 'text-orange-400' }`}>
+                  {v8Status.expandCount||0}×
+                </div>
+              </div>
+              <div className="bg-[#1a1528] border border-purple-900/30 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">Runtime</div>
+                <div className="text-sm font-bold text-gray-300">{v8Status.runtime||'—'}</div>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-3 text-xs text-gray-500">
+              <span>📊 {v8Status.symbol}</span>
+              <span>⚡ {v8Status.leverage}x</span>
+              <span>📦 {v8Status.totalLevels} levels</span>
+              <span>📏 {v8Status.gridSpacingPct}% spacing</span>
+              <span>🕐 Last cycle: {v8Status.lastCycleAt ? formatDistanceToNow(new Date(v8Status.lastCycleAt), { addSuffix: true }) : '—'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Idle state */}
+        {!v8Status?.isActive && !showV8Config && (
+          <div className="p-8 text-center text-gray-600">
+            <Grid className="w-10 h-10 mx-auto mb-2 opacity-20" />
+            <p>V8 Weekend Grid Bot is idle. Click <span className="text-purple-400">START V8</span> to launch.</p>
+            <p className="text-xs mt-1 text-gray-700">Default: ETHUSDT · 15x · 12 grids · 0.25% · 85% capital</p>
           </div>
         )}
       </div>
