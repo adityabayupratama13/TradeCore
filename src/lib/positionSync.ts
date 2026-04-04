@@ -126,6 +126,9 @@ export async function syncPositions(): Promise<void> {
             if (!portfolio) {
                 portfolio = await prisma.portfolio.create({ data: { name: 'Main Portfolio', totalCapital: 1000, currency: 'USD' } });
             }
+            // Read current engine version so adopted positions are tagged correctly
+            const versionSetting = await prisma.appSettings.findUnique({ where: { key: 'engine_version' } });
+            const currentEngineVersion = versionSetting?.value || 'v6';
             await prisma.trade.create({
               data: {
                 portfolioId: portfolio.id,
@@ -136,9 +139,10 @@ export async function syncPositions(): Promise<void> {
                 leverage: pos.leverage,
                 status: "OPEN",
                 marketType: "FUTURES",
+                engineVersion: currentEngineVersion,  // ← fix: tag with actual engine version
               }
             });
-            console.log(`[PosSync] Successfully adopted ${pos.symbol}`);
+            console.log(`[PosSync] Successfully adopted ${pos.symbol} as ${currentEngineVersion}`);
         } catch(e) {
             console.error(`[PosSync] Failed to adopt position ${pos.symbol}`, e);
         }
